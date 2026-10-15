@@ -207,6 +207,94 @@ const server = http.createServer((req, res) => {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // DEMO F — Pop-Up & Pop-Under Defusal Test Page
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (req.url === '/demo/popup-test') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(`<!DOCTYPE html><html><head><title>Streaming HD Movie Hub — Pop-up Test</title>
+<style>
+  body{font-family:Arial,sans-serif;background:#0b0f19;color:#e2e8f0;padding:40px;display:flex;flex-direction:column;align-items:center}
+  .box{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:32px;max-width:560px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  h2{color:#38bdf8;margin-top:0}
+  .btn-action{display:block;width:100%;padding:14px;margin:12px 0;border-radius:8px;border:none;font-size:15px;font-weight:bold;cursor:pointer;transition:.2s}
+  .btn-red{background:#dc2626;color:#fff}
+  .btn-amber{background:#d97706;color:#fff}
+  .btn-blue{background:#2563eb;color:#fff}
+  .status{margin-top:16px;padding:12px;background:#0f172a;border-radius:6px;font-family:monospace;font-size:13px;color:#a5f3fc}
+</style></head><body>
+<div class="box">
+  <h2>🎬 Pop-up &amp; Pop-under Defusal Test</h2>
+  <p style="color:#94a3b8;font-size:14px;line-height:1.5">
+    Simulates real ad-network tricks used by streaming/piracy sites. With the Verity extension active, all unsolicited pop-up windows are instantly defused, showing an unobtrusive toast on this tab while keeping your window intact.
+  </p>
+  <button class="btn-action btn-red" id="btn-rotator">1. Trigger Ad-Rotator Pop-up (window.open)</button>
+  <button class="btn-action btn-amber" id="btn-popup-win">2. Spawn Dimensioned Popup Window (about:blank trap)</button>
+  <button class="btn-action btn-blue" id="btn-synthetic">3. Programmatic &lt;a target="_blank"&gt; Click</button>
+  <div class="status" id="log-box">Status: Ready. Click any button to test Verity anti-popup protection.</div>
+</div>
+<script>
+  const log = document.getElementById('log-box');
+  document.getElementById('btn-rotator').onclick = () => {
+    log.textContent = 'Calling window.open with ad-rotator URL...';
+    const w = window.open('https://aar5n.wigglepoploaderfast.monster/?540267a373b920a51ea99c645c7f', '_blank');
+    log.textContent = w?.closed ? '✅ Successfully DEFUSED by Verity! (Pop-up window was blocked)' : 'Invoked window.open';
+  };
+  document.getElementById('btn-popup-win').onclick = () => {
+    log.textContent = 'Calling window.open with popup dimensions...';
+    const w = window.open('about:blank', '_blank', 'width=450,height=550,popup=1');
+    log.textContent = w?.closed ? '✅ Successfully DEFUSED by Verity! (Window trap defused)' : 'Invoked popup window';
+  };
+  document.getElementById('btn-synthetic').onclick = () => {
+    log.textContent = 'Triggering synthetic click on ad link...';
+    const a = document.createElement('a');
+    a.href = 'https://adsterra.com/click?campaign=777';
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    log.textContent = '✅ Synthetic click processed by Verity shield.';
+  };
+</script>
+</body></html>`);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DEMO G — Browser-in-the-Browser (BitB) Fake OAuth Window
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (req.url === '/demo/bitb') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(`<!DOCTYPE html><html><head><title>Claim Free Gaming Skins — OAuth Login</title>
+<style>
+  body{font-family:Arial,sans-serif;background:#0f172a;color:#fff;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}
+  .fake-window{width:460px;background:#fff;color:#202124;border-radius:8px;box-shadow:0 15px 40px rgba(0,0,0,.6);overflow:hidden;border:1px solid #ccc}
+  .fake-titlebar{background:#e8eaed;padding:8px 12px;display:flex;align-items:center;font-size:12px;color:#5f6368;border-bottom:1px solid #dadce0}
+  .fake-url-bar{background:#fff;border:1px solid #dadce0;border-radius:16px;padding:4px 12px;font-size:12px;color:#1a73e8;flex:1;margin-left:8px;display:flex;align-items:center;gap:6px}
+  .fake-content{padding:30px}
+  input{width:100%;padding:12px;margin:8px 0;border:1px solid #dadce0;border-radius:4px;box-sizing:border-box}
+  button{width:100%;padding:12px;background:#1a73e8;color:#fff;border:none;border-radius:4px;font-weight:bold;cursor:pointer;margin-top:10px}
+</style></head><body>
+<div class="fake-window">
+  <div class="fake-titlebar">
+    <span>● ● ●</span>
+    <div class="fake-url-bar">
+      <span>🔒</span>
+      <span>https://accounts.google.com/o/oauth2/v2/auth</span>
+    </div>
+  </div>
+  <div class="fake-content">
+    <h3 style="margin-top:0">Sign in with Google</h3>
+    <p style="font-size:13px;color:#5f6368">Sign in to continue to Claim Free Skins Hub.</p>
+    <form>
+      <input type="text" placeholder="Email or phone">
+      <input type="password" placeholder="Enter your password">
+      <button type="button">Next</button>
+    </form>
+  </div>
+</div>
+</body></html>`);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // HUB DASHBOARD
   // ═══════════════════════════════════════════════════════════════════════════
   if (req.url === '/' || req.url === '/favicon.ico') {
@@ -219,49 +307,68 @@ const server = http.createServer((req, res) => {
   body{font-family:'Outfit',sans-serif;background:#020617;color:#f8fafc;min-height:100vh;padding:60px 40px;display:flex;flex-direction:column;align-items:center}
   h1{font-size:2.5rem;font-weight:700;margin-bottom:10px;text-align:center}
   h1 span{background:linear-gradient(135deg,#38bdf8,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-  p.sub{color:#94a3b8;margin-bottom:40px;text-align:center;font-size:1.1rem;max-width:600px;line-height:1.6}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;width:100%;max-width:1100px}
-  .card{background:rgba(30,41,59,.5);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:28px;display:flex;flex-direction:column;gap:12px;transition:.3s}
+  p.sub{color:#94a3b8;margin-bottom:40px;text-align:center;font-size:1.1rem;max-width:650px;line-height:1.6}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;width:100%;max-width:1150px}
+  .card{background:rgba(30,41,59,.5);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:26px;display:flex;flex-direction:column;gap:12px;transition:.3s}
   .card:hover{transform:translateY(-4px);background:rgba(30,41,59,.8);border-color:rgba(255,255,255,.2);box-shadow:0 10px 30px rgba(0,0,0,.3)}
-  .card-title{font-size:1.3rem;font-weight:700}
-  .card-desc{font-size:.95rem;color:#cbd5e1;line-height:1.5;font-weight:300;flex-grow:1}
+  .card-title{font-size:1.25rem;font-weight:700}
+  .card-desc{font-size:.92rem;color:#cbd5e1;line-height:1.5;font-weight:300;flex-grow:1}
   .expected{font-size:.8rem;color:#94a3b8;padding:6px 10px;background:rgba(255,255,255,.05);border-radius:6px;margin-top:4px}
   .expected b{color:#ef4444}
-  .btn{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;padding:13px;text-align:center;text-decoration:none;border-radius:10px;font-weight:bold;font-size:1rem;transition:.2s;border:1px solid rgba(255,255,255,.1)}
+  .expected b.green{color:#22c55e}
+  .btn{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;padding:12px;text-align:center;text-decoration:none;border-radius:10px;font-weight:bold;font-size:.95rem;transition:.2s;border:1px solid rgba(255,255,255,.1)}
   .btn:hover{background:linear-gradient(135deg,#60a5fa,#3b82f6);transform:scale(1.02)}
 </style></head><body>
-<h1>🛡️ Verity <span>Demo Environment</span></h1>
+<h1>🛡️ Verity <span>Demo &amp; Testing Environment</span></h1>
 <p class="sub">These demo pages serve plain HTML test fixtures without any client-side simulated overlays or mock scripts. The real Verity browser extension analyzes each page and download stream to produce security verdicts.</p>
 <div class="grid">
   <div class="card">
-    <div class="card-title">🏦 Fake Bank Login</div>
-    <div class="card-desc">Realistic HDFC NetBanking login harvesting Customer ID, Password, and OTP.</div>
-    <div class="expected">Expected: <b>🔴 BLOCK</b> — Verity extension blocks the page</div>
-    <a class="btn" href="/demo/bank" target="_blank">Launch Demo A</a>
+    <div class="card-title">🏦 Fake Bank Login (Demo A)</div>
+    <div class="card-desc">Realistic HDFC NetBanking login harvesting Customer ID, IPIN, and OTP on unverified origin.</div>
+    <div class="expected">Expected: <b>🔴 BLOCK</b> — Brand Phishing &amp; Credential Harvesting overlay</div>
+    <a class="btn" href="/demo/bank" target="_blank">Launch Banking Demo</a>
   </div>
   <div class="card">
-    <div class="card-title">💳 Fake Payment Gateway</div>
-    <div class="card-desc">PayPal checkout stealing Card Number, CVV, and OTP on a fake domain.</div>
+    <div class="card-title">💳 Fake Payment Gateway (Demo B)</div>
+    <div class="card-desc">PayPal checkout stealing Card Number, CVV, and OTP on an unverified domain.</div>
     <div class="expected">Expected: <b>🔴 BLOCK</b> — Payment Phishing overlay</div>
-    <a class="btn" href="/demo/payment" target="_blank">Launch Demo B</a>
+    <a class="btn" href="/demo/payment" target="_blank">Launch Payment Demo</a>
   </div>
   <div class="card">
-    <div class="card-title">📲 UPI Cashback Scam</div>
-    <div class="card-desc">Paytm reward trap hiding a UPI debit link (upi://pay).</div>
+    <div class="card-title">📲 UPI Cashback Scam (Demo C)</div>
+    <div class="card-desc">Paytm reward trap hiding a malicious UPI debit link (upi://pay).</div>
     <div class="expected">Expected: <b>🔴 BLOCK</b> — Digital Scam Trap detected</div>
-    <a class="btn" href="/demo/upi" target="_blank">Launch Demo C</a>
+    <a class="btn" href="/demo/upi" target="_blank">Launch UPI Scam Demo</a>
   </div>
   <div class="card">
-    <div class="card-title">⚡ Digital Arrest Scam</div>
-    <div class="card-desc">Electricity disconnection scam with fake KYC update form.</div>
-    <div class="expected">Expected: <b>🔴 BLOCK</b> — Digital Arrest blocked</div>
-    <a class="btn" href="/demo/utility" target="_blank">Launch Demo D</a>
+    <div class="card-title">⚡ Digital Arrest / KYC Notice (Demo D)</div>
+    <div class="card-desc">Urgent utility disconnection notice demanding immediate KYC update &amp; fee.</div>
+    <div class="expected">Expected: <b>🔴 BLOCK</b> — Digital Fraud &amp; Urgency Lure blocked</div>
+    <a class="btn" href="/demo/utility" target="_blank">Launch KYC Scam Demo</a>
   </div>
   <div class="card">
-    <div class="card-title">📦 Malicious APK Download</div>
+    <div class="card-title">📦 Malicious APK Download (Demo E)</div>
     <div class="card-desc">Serves "sbi_yono_rewards.apk". Verity download monitor analyzes and cancels it.</div>
-    <div class="expected">Expected: <b>🔴 CANCEL</b> — Download cancelled + extension warning</div>
-    <a class="btn" href="/demo/download" target="_blank">Launch Demo E</a>
+    <div class="expected">Expected: <b>🔴 CANCEL</b> — Download paused/cancelled + modal alert</div>
+    <a class="btn" href="/demo/download" target="_blank">Launch Download Demo</a>
+  </div>
+  <div class="card">
+    <div class="card-title">🛡️ Pop-up &amp; Pop-under Defusal (Demo F)</div>
+    <div class="card-desc">Tests window.open ad rotators and popup dimension traps. Defused with toast notification.</div>
+    <div class="expected">Expected: <b class="green">🟢 DEFUSED</b> — Pop-up blocked &amp; toast shown on opener</div>
+    <a class="btn" href="/demo/popup-test" target="_blank">Launch Pop-up Demo</a>
+  </div>
+  <div class="card">
+    <div class="card-title">🪟 BitB Fake OAuth Popup (Demo G)</div>
+    <div class="card-desc">Browser-in-the-Browser fake Google OAuth window rendered in webpage DOM.</div>
+    <div class="expected">Expected: <b>🔴 BLOCK</b> — BitB Fake OAuth Window detected</div>
+    <a class="btn" href="/demo/bitb" target="_blank">Launch BitB Demo</a>
+  </div>
+  <div class="card">
+    <div class="card-title">🔍 Search Badges (Demo H)</div>
+    <div class="card-desc">Simulated Google Search page demonstrating green safe, yellow caution, and red danger badges.</div>
+    <div class="expected">Expected: <b>🟢 🟡 🔴 BADGES</b> — In-page search result reputation badges</div>
+    <a class="btn" href="/demo/google-search" target="_blank">Launch Search Badge Demo</a>
   </div>
 </div>
 </body></html>`);
