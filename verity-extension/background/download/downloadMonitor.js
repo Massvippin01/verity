@@ -47,11 +47,27 @@ export function isDownloadApproved(downloadId) {
 export async function proceedAnyway(downloadId) {
   if (downloadId == null) return { ok: false, error: 'Missing downloadId' };
   await approveDownload(downloadId);
-  if (typeof chrome !== 'undefined' && chrome.downloads && chrome.downloads.resume) {
-    try {
-      await chrome.downloads.resume(downloadId);
-    } catch (e) {
-      console.warn('[Verity] Error resuming download:', e);
+  if (typeof chrome !== 'undefined' && chrome.downloads) {
+    let resumed = false;
+    if (chrome.downloads.resume) {
+      try {
+        await chrome.downloads.resume(downloadId);
+        resumed = true;
+      } catch (e) {
+        console.warn('[Verity] Error resuming download:', e);
+      }
+    }
+    // If resuming failed because the file was cancelled/erased, re-download under approval
+    if (!resumed) {
+      const session = downloadSessions.get(downloadId);
+      const urlToDownload = session?.url || session?.finalUrl;
+      if (urlToDownload && chrome.downloads.download) {
+        try {
+          await chrome.downloads.download({ url: urlToDownload });
+        } catch (e2) {
+          console.warn('[Verity] Error re-initiating download:', e2);
+        }
+      }
     }
   }
   return { ok: true };
@@ -63,6 +79,9 @@ export async function cancelAndDelete(downloadId) {
     try {
       if (chrome.downloads.cancel) {
         await chrome.downloads.cancel(downloadId).catch(() => {});
+      }
+      if (chrome.downloads.removeFile) {
+        await chrome.downloads.removeFile(downloadId).catch(() => {});
       }
       if (chrome.downloads.erase) {
         await chrome.downloads.erase({ id: downloadId }).catch(() => {});
@@ -354,7 +373,9 @@ async function handleDownloadCreated(downloadItem) {
     analyzed: false,
     timer: null,
     resolvedFilename: basename,
-    contentDispositionSpoofed: false
+    contentDispositionSpoofed: false,
+    url: downloadItem.url,
+    finalUrl: downloadItem.finalUrl
   });
 
   try {
@@ -408,11 +429,17 @@ export async function runAnalysis(downloadItem, extraContext = {}) {
       analyzed: false,
       timer: null,
       resolvedFilename: resolvedName,
-      contentDispositionSpoofed: !!extraContext.contentDispositionSpoofed
+      contentDispositionSpoofed: !!extraContext.contentDispositionSpoofed,
+      url: downloadItem.url,
+      finalUrl: downloadItem.finalUrl
     };
     downloadSessions.set(id, session);
   } else if (session.analyzed) {
     return;
+  }
+  if (!session.url && downloadItem.url) session.url = downloadItem.url;
+  if (!session.finalUrl && (downloadItem.finalUrl || downloadItem.url)) {
+    session.finalUrl = downloadItem.finalUrl || downloadItem.url;
   }
   session.analyzed = true;
   session.resolvedFilename = resolvedName;

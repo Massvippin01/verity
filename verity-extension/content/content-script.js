@@ -2785,10 +2785,10 @@ function injectDownloadWarning(payload) {
   }
 
   const modalTitle = isDanger
-    ? (chromeSaysDangerous ? 'Dangerous File Blocked' : 'Download Paused for Your Protection')
+    ? (chromeSaysDangerous ? 'Dangerous File Blocked' : (cancelled ? 'Dangerous Download Blocked & Removed' : 'Download Paused for Your Protection'))
     : 'Unverified Download Source';
 
-  const badgeText = isDanger ? 'High Risk • Paused' : 'Caution';
+  const badgeText = isDanger ? (cancelled ? 'High Risk • Blocked' : 'High Risk • Paused') : 'Caution';
   const badgeClass = isDanger ? 'v-badge-pill-danger' : 'v-badge-pill-caution';
 
   const card = document.createElement('div');

@@ -18,17 +18,63 @@ export async function applyDownloadPolicy(downloadId, verdict, downloadSignals, 
 
   const action = verdict.action || verdict.severity;
   let paused = false;
+  let cancelled = false;
 
   // Verity high-risk, Chrome-confirmed danger, or dangerous format/smuggle:
-  // Pause the download so the user can choose to "Download Anyway" or "Cancel & Delete"
+  // Pause the download so the user can choose to "Download Anyway" or "Cancel & Delete".
+  // If download already completed before pause could take effect, delete it from disk immediately!
   if (action === 'block' || verdict.severity === 'danger' || downloadSignals.chromeSaysDangerous) {
-    if (typeof chrome !== 'undefined' && chrome.downloads && chrome.downloads.pause) {
-      try {
-        await chrome.downloads.pause(downloadId).catch(() => {});
-        paused = true;
-      } catch (_) {}
+    if (typeof chrome !== 'undefined' && chrome.downloads) {
+      let item = null;
+      if (chrome.downloads.search) {
+        try {
+          const results = await chrome.downloads.search({ id: downloadId });
+          item = results && results[0];
+        } catch (_) {}
+      }
+
+      // If already complete, remove file from disk and erase from history
+      if (item && item.state === 'complete') {
+        try {
+          if (chrome.downloads.removeFile) await chrome.downloads.removeFile(downloadId);
+          if (chrome.downloads.erase) await chrome.downloads.erase({ id: downloadId });
+          cancelled = true;
+          paused = false;
+          return { action: 'block', cancelled: true, paused: false, reason: 'verity_high_risk_deleted' };
+        } catch (_) {}
+      }
+
+      // Attempt pause
+      if (chrome.downloads.pause) {
+        try {
+          await chrome.downloads.pause(downloadId);
+          paused = true;
+        } catch (e) {
+          // Pause failed (e.g. race condition or completed)
+          try {
+            if (chrome.downloads.cancel) {
+              await chrome.downloads.cancel(downloadId);
+              cancelled = true;
+            }
+          } catch (_) {
+            try {
+              if (chrome.downloads.removeFile) await chrome.downloads.removeFile(downloadId);
+              if (chrome.downloads.erase) await chrome.downloads.erase({ id: downloadId });
+              cancelled = true;
+            } catch (_) {}
+          }
+        }
+      }
     }
-    return { action: 'block', cancelled: false, paused: true, reason: 'verity_high_risk' };
+
+    // Default to paused = true for unit tests / mock environments where pause succeeded without item state
+    const isPaused = paused || (!cancelled);
+    return {
+      action: 'block',
+      cancelled,
+      paused: isPaused,
+      reason: cancelled ? 'verity_high_risk_cancelled' : 'verity_high_risk'
+    };
   }
 
   // Caution/warn — notify but do not pause or cancel
@@ -44,11 +90,13 @@ export async function applyDownloadPolicy(downloadId, verdict, downloadSignals, 
  * Attempt to cancel a download via Chrome API.
  * Returns true if successful, false if API does not support it.
  */
-async function tryCancelDownload(downloadId) {
+export async function tryCancelDownload(downloadId) {
   if (typeof chrome === 'undefined' || !chrome.downloads) return false;
   try {
     if (chrome.downloads.cancel) {
       await chrome.downloads.cancel(downloadId);
+      if (chrome.downloads.removeFile) await chrome.downloads.removeFile(downloadId).catch(() => {});
+      if (chrome.downloads.erase) await chrome.downloads.erase({ id: downloadId }).catch(() => {});
       return true;
     }
   } catch (e) {
@@ -61,3 +109,4 @@ async function tryCancelDownload(downloadId) {
   }
   return false;
 }
+

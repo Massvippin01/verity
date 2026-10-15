@@ -384,11 +384,51 @@ const tracker = http.createServer((req, res) => {
 
   // Serves fake APK binary payload
   if (req.url === '/downloads/sbi_yono_rewards.apk') {
+    const totalBytes = 5 * 1024 * 1024;
+    const chunkSize = 64 * 1024;
+    const dummyChunk = Buffer.alloc(chunkSize, 0x50);
+    dummyChunk.write('PK\x03\x04verity_sbi_yono_malicious_apk_payload', 0);
+
     res.writeHead(200, {
       'Content-Type': 'application/vnd.android.package-archive',
-      'Content-Disposition': 'attachment; filename="sbi_yono_rewards.apk"'
+      'Content-Disposition': 'attachment; filename="sbi_yono_rewards.apk"',
+      'Content-Length': totalBytes,
+      'Accept-Ranges': 'bytes'
     });
-    return res.end(Buffer.from('FAKEMALWAREBINARYPAYLOAD'));
+
+    let sentBytes = 0;
+    let timer = null;
+
+    const cleanup = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+
+    req.on('close', cleanup);
+    res.on('close', cleanup);
+    res.on('error', cleanup);
+
+    res.write(dummyChunk);
+    sentBytes += chunkSize;
+
+    timer = setInterval(() => {
+      if (res.writableEnded || res.destroyed || req.destroyed) {
+        cleanup();
+        return;
+      }
+      if (sentBytes < totalBytes) {
+        const toSend = Math.min(chunkSize, totalBytes - sentBytes);
+        res.write(dummyChunk.subarray(0, toSend));
+        sentBytes += toSend;
+      } else {
+        cleanup();
+        res.end();
+      }
+    }, 150);
+
+    return;
   }
 
   // Malvertising landing (simulated ad-redirect network landing page)

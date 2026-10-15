@@ -8,13 +8,55 @@ const server = http.createServer((req, res) => {
   // DOWNLOAD ENDPOINT — Malicious APK payload
   // ═══════════════════════════════════════════════════════════════════════════
   if (req.url === '/download-file' || req.url === '/downloads/sbi_yono_rewards.apk') {
+    const totalBytes = 5 * 1024 * 1024; // 5 MB realistic APK size
+    const chunkSize = 64 * 1024; // 64 KB per chunk
+    const dummyChunk = Buffer.alloc(chunkSize, 0x50);
+    dummyChunk.write('PK\x03\x04verity_sbi_yono_malicious_apk_payload', 0);
+
     res.writeHead(200, {
       'Content-Type': 'application/vnd.android.package-archive',
       'Content-Disposition': 'attachment; filename="sbi_yono_rewards.apk"',
-      'Content-Length': 32
+      'Content-Length': totalBytes,
+      'Accept-Ranges': 'bytes'
     });
-    return res.end(Buffer.from('PK\x03\x04verity_test_payload_apk_binary'));
+
+    let sentBytes = 0;
+    let timer = null;
+
+    const cleanup = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+
+    req.on('close', cleanup);
+    res.on('close', cleanup);
+    res.on('error', cleanup);
+
+    // Send first chunk immediately so Chrome receives headers, creates download, and determines filename
+    res.write(dummyChunk);
+    sentBytes += chunkSize;
+
+    // Stream remaining chunks spaced out to give Chrome active in-progress state for pause
+    timer = setInterval(() => {
+      if (res.writableEnded || res.destroyed || req.destroyed) {
+        cleanup();
+        return;
+      }
+      if (sentBytes < totalBytes) {
+        const toSend = Math.min(chunkSize, totalBytes - sentBytes);
+        res.write(dummyChunk.subarray(0, toSend));
+        sentBytes += toSend;
+      } else {
+        cleanup();
+        res.end();
+      }
+    }, 150);
+
+    return;
   }
+
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DEMO A — Fake Bank Login (Plain HTML, no embedded overlays)
