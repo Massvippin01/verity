@@ -8,56 +8,36 @@
  * @param {number} downloadId - Chrome download ID
  * @param {object} verdict    - From calculateRisk()
  * @param {object} downloadSignals - Normalized download features
- * @returns {Promise<{ action: string, cancelled: boolean }>}
+ * @param {boolean} [isApproved] - Whether the user previously approved this download
+ * @returns {Promise<{ action: string, cancelled: boolean, paused: boolean, reason: string }>}
  */
-export async function applyDownloadPolicy(downloadId, verdict, downloadSignals) {
+export async function applyDownloadPolicy(downloadId, verdict, downloadSignals, isApproved = false) {
+  if (isApproved) {
+    return { action: 'allow', cancelled: false, paused: false, reason: 'user_approved' };
+  }
+
   const action = verdict.action || verdict.severity;
-  let cancelled = false;
+  let paused = false;
 
-  // Chrome-confirmed dangerous: always attempt cancel
-  if (downloadSignals.chromeSaysDangerous) {
-    cancelled = await tryCancelDownload(downloadId);
-    return { action: 'block', cancelled, reason: 'chrome_danger' };
-  }
-
-  // HTML smuggling paired with risky extension or archive: pause and enforce block
-  if (downloadSignals.htmlSmuggling && (downloadSignals.archiveDownload || downloadSignals.executableDownload || downloadSignals.scriptDownload || downloadSignals.installerDownload || downloadSignals.isDangerousExtension)) {
+  // Verity high-risk, Chrome-confirmed danger, or dangerous format/smuggle:
+  // Pause the download so the user can choose to "Download Anyway" or "Cancel & Delete"
+  if (action === 'block' || verdict.severity === 'danger' || downloadSignals.chromeSaysDangerous) {
     if (typeof chrome !== 'undefined' && chrome.downloads && chrome.downloads.pause) {
-      await chrome.downloads.pause(downloadId).catch(() => {});
+      try {
+        await chrome.downloads.pause(downloadId).catch(() => {});
+        paused = true;
+      } catch (_) {}
     }
-    if (action === 'block' || verdict.severity === 'danger') {
-      cancelled = await tryCancelDownload(downloadId);
-    }
-    return { action: 'block', cancelled, reason: 'html_smuggling' };
+    return { action: 'block', cancelled: false, paused: true, reason: 'verity_high_risk' };
   }
 
-  // Content-Disposition spoofing (.pdf/.html URL resolving to executable/container): pause and enforce block
-  if (downloadSignals.contentDispositionSpoofed && (downloadSignals.archiveDownload || downloadSignals.executableDownload || downloadSignals.scriptDownload || downloadSignals.installerDownload || downloadSignals.isDangerousExtension)) {
-    if (typeof chrome !== 'undefined' && chrome.downloads && chrome.downloads.pause) {
-      await chrome.downloads.pause(downloadId).catch(() => {});
-    }
-    if (action === 'block' || verdict.severity === 'danger') {
-      cancelled = await tryCancelDownload(downloadId);
-    }
-    return { action: 'block', cancelled, reason: 'content_disposition_spoof' };
-  }
-
-  // Verity high-risk (block verdict from risk engine)
-  if (action === 'block' || verdict.severity === 'danger') {
-    // Attempt cancel for executables, scripts, installers, modern containers, and dangerous formats
-    if (downloadSignals.executableDownload || downloadSignals.scriptDownload || downloadSignals.installerDownload || downloadSignals.isDangerousExtension || downloadSignals.archiveDownload) {
-      cancelled = await tryCancelDownload(downloadId);
-    }
-    return { action: 'block', cancelled, reason: 'verity_high_risk' };
-  }
-
-  // Caution/warn — notify but do not cancel
+  // Caution/warn — notify but do not pause or cancel
   if (action === 'warn' || verdict.severity === 'caution') {
-    return { action: 'warn', cancelled: false, reason: 'verity_caution' };
+    return { action: 'warn', cancelled: false, paused: false, reason: 'verity_caution' };
   }
 
   // Safe / low risk — allow silently
-  return { action: 'allow', cancelled: false, reason: 'verity_safe' };
+  return { action: 'allow', cancelled: false, paused: false, reason: 'verity_safe' };
 }
 
 /**

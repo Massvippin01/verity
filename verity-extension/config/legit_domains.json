@@ -64,6 +64,34 @@
     "source": "https://tranco-list.eu/"
   },
   {
+    "domain": "youtube.com",
+    "source": "https://tranco-list.eu/"
+  },
+  {
+    "domain": "youtube-nocookie.com",
+    "source": "https://www.youtube-nocookie.com/"
+  },
+  {
+    "domain": "youtu.be",
+    "source": "https://youtu.be/"
+  },
+  {
+    "domain": "vimeo.com",
+    "source": "https://tranco-list.eu/"
+  },
+  {
+    "domain": "player.vimeo.com",
+    "source": "https://vimeo.com/"
+  },
+  {
+    "domain": "dailymotion.com",
+    "source": "https://tranco-list.eu/"
+  },
+  {
+    "domain": "twitch.tv",
+    "source": "https://tranco-list.eu/"
+  },
+  {
     "domain": "github.com",
     "source": "https://tranco-list.eu/"
   },

@@ -11,7 +11,7 @@
   'use strict';
 
   // ── Step 2.1: Immediate Early Exit on Search Engines & Top Trusted Domains ──
-  const TRUSTED_DOMAINS_REGEX = /(^|\.)(google\.[a-z.]+|bing\.com|duckduckgo\.com|yahoo\.com|brave\.com|youtube\.com|github\.com|microsoft\.com|live\.com|office\.com|apple\.com|amazon\.[a-z.]+|wikipedia\.org|reddit\.com|chatgpt\.com|openai\.com|claude\.ai|gemini\.google\.com|localhost|127\.0\.0\.1)$/i;
+  const TRUSTED_DOMAINS_REGEX = /(^|\.)(google\.[a-z.]+|bing\.com|duckduckgo\.com|yahoo\.com|brave\.com|youtube\.com|youtube-nocookie\.com|youtu\.be|vimeo\.com|player\.vimeo\.com|dailymotion\.com|twitch\.tv|github\.com|microsoft\.com|live\.com|office\.com|apple\.com|amazon\.[a-z.]+|wikipedia\.org|reddit\.com|chatgpt\.com|openai\.com|claude\.ai|gemini\.google\.com|localhost|127\.0\.0\.1)$/i;
 
   function isTrustedSearchOrTopDomain(hostname) {
     if (!hostname || typeof hostname !== 'string') return false;
@@ -254,6 +254,148 @@
         return Promise.reject(new DOMException('ServiceWorker registration blocked on suspicious domain by Verity Security Shield', 'SecurityError'));
       }
       return origSwRegister.apply(this, arguments);
+    };
+  }
+
+  // ── 8. Anti-Popup & Pop-Under Defusal: Intercept window.open ──────────────
+  if (typeof window !== 'undefined' && typeof window.open === 'function') {
+    const originalOpen = window.open;
+
+    function isRoguePopupTarget(url, features) {
+      const urlStr = url ? String(url).trim() : '';
+      if (!urlStr || urlStr === 'about:blank') {
+        if (typeof features === 'string' && features.length > 0) {
+          const lowerFeat = features.toLowerCase();
+          if (lowerFeat.includes('width=') || lowerFeat.includes('height=') ||
+              lowerFeat.includes('popup=') || lowerFeat.includes('menubar=') ||
+              lowerFeat.includes('toolbar=')) {
+            return true;
+          }
+        }
+        return isSuspiciousHostContext();
+      }
+
+      const lowerUrl = urlStr.toLowerCase();
+
+      // Explicit ad-rotator and popunder indicators
+      const AD_PATTERNS = [
+        'utm_medium=popunder', 'propellerads', 'popads', 'adsterra', 'clickadu',
+        'exoclick', 'popcash', 'hilltopads', 'richads', 'monetag', 'galaksion',
+        'wigglepoploaderfast', 'bet365', '1xbet', 'dafabet', 'popunder',
+        'adnetwork', 'adrotator', 'trafficjunky', 'adnxs', 'onclick'
+      ];
+      if (AD_PATTERNS.some(pat => lowerUrl.includes(pat))) {
+        return true;
+      }
+      if (/\?[a-f0-9]{16,64}/i.test(urlStr)) {
+        return true;
+      }
+
+      const SUSP_TLDS = ['.monster', '.click', '.sbs', '.cfd', '.rest', '.icu', '.cyou', '.buzz', '.top', '.live', '.xyz'];
+      try {
+        const parsed = new URL(urlStr, window.location.href);
+        const host = parsed.hostname.toLowerCase();
+        const curHost = window.location.hostname.toLowerCase();
+
+        // Allow same root domain
+        if (host === curHost || host.endsWith('.' + curHost) || curHost.endsWith('.' + host)) {
+          return false;
+        }
+
+        // Allow official OAuth providers
+        const OAUTH_PROVIDERS = /(^|\.)(accounts\.google\.com|login\.microsoftonline\.com|appleid\.apple\.com|github\.com|auth0\.com|okta\.com)$/i;
+        if (OAUTH_PROVIDERS.test(host)) {
+          return false;
+        }
+
+        if (SUSP_TLDS.some(tld => host.endsWith(tld))) {
+          return true;
+        }
+
+        if (isSuspiciousHostContext()) {
+          return true;
+        }
+      } catch (_) {}
+
+      return false;
+    }
+
+    function createDummyWindow(targetUrl) {
+      return {
+        closed: true,
+        name: '',
+        opener: window,
+        parent: window,
+        top: window,
+        focus: function () {},
+        blur: function () {},
+        close: function () { this.closed = true; },
+        postMessage: function () {},
+        addEventListener: function () {},
+        removeEventListener: function () {},
+        dispatchEvent: function () { return false; },
+        document: {
+          write: function () {},
+          writeln: function () {},
+          open: function () {},
+          close: function () {},
+          createElement: function () { return {}; },
+          body: {}
+        },
+        location: {
+          _href: targetUrl || '',
+          get href() { return this._href; },
+          set href(val) {
+            this._href = val;
+            if (isRoguePopupTarget(val, '')) {
+              notifyThreat('SIG_POPUNDER_SPAWN', { blockedUrl: val });
+            }
+          },
+          replace: function (val) { this.href = val; },
+          assign: function (val) { this.href = val; },
+          reload: function () {}
+        }
+      };
+    }
+
+    window.open = function (url, target, features) {
+      const urlStr = typeof url === 'string' ? url : (url ? String(url) : '');
+      const isRogue = isRoguePopupTarget(urlStr, features);
+
+      if (isRogue) {
+        let blockedHost = urlStr;
+        try {
+          blockedHost = urlStr ? new URL(urlStr, window.location.href).hostname : 'Untrusted origin';
+        } catch (_) {}
+        notifyThreat('SIG_POPUNDER_SPAWN', { blockedUrl: urlStr, hostname: blockedHost });
+        return createDummyWindow(urlStr);
+      }
+
+      return originalOpen.apply(this, arguments);
+    };
+  }
+
+  // ── 9. Intercept synthetic clicks on <a target="_blank"> ───────────────────
+  if (typeof HTMLAnchorElement !== 'undefined' && HTMLAnchorElement.prototype) {
+    const origClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () {
+      const target = (this.getAttribute('target') || this.target || '').toLowerCase();
+      const href = this.getAttribute('href') || this.href || '';
+      if ((target === '_blank' || target === '_new') && href) {
+        const lowerHref = href.toLowerCase();
+        const AD_PATTERNS = [
+          'utm_medium=popunder', 'propellerads', 'popads', 'adsterra', 'clickadu',
+          'exoclick', 'popcash', 'hilltopads', 'richads', 'monetag', 'galaksion',
+          'wigglepoploaderfast', 'bet365', '1xbet', 'dafabet', 'popunder'
+        ];
+        if (AD_PATTERNS.some(pat => lowerHref.includes(pat)) || /\?[a-f0-9]{16,64}/i.test(href)) {
+          let blockedHost = href;
+          try { blockedHost = new URL(href, window.location.href).hostname; } catch (_) {}
+          notifyThreat('SIG_POPUNDER_SPAWN', { blockedUrl: href, hostname: blockedHost });
+          return;
+        }
+      }
+      return origClick.apply(this, arguments);
     };
   }
 

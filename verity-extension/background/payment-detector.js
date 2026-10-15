@@ -11,6 +11,13 @@
 import { isAllowlistedDomain } from '../shared/legit-domains.js';
 import { getDomain } from '../shared/psl.js';
 import { t } from '../shared/messages.js';
+import { isTrustedTopDomain } from './rules.js';
+
+export function isEmbeddedMediaHost(hostname) {
+  if (!hostname) return false;
+  const h = hostname.toLowerCase();
+  return /(^|\.)(youtube(-nocookie)?\.com|youtu\.be|vimeo\.com|player\.vimeo\.com|dailymotion\.com|twitch\.tv|player\.twitch\.tv)$/i.test(h);
+}
 
 // ─── Payment intent keywords (page text scan) ───────────────────────────────
 const PAYMENT_INTENT_KEYWORDS = [
@@ -131,13 +138,23 @@ function verifyProviderDomain(hostname, claimedProviderObj, paymentBrands) {
 
   const currentRootDomain = getDomain(hostname) || hostname;
 
-  // Check if hostname is ANY trusted payment provider
-  const isTrustedProvider = isAllowlistedDomain(hostname) || (paymentBrands || []).some(brand =>
+  // Check if hostname is ANY trusted payment provider or trusted top domain
+  const isTrustedProvider = isAllowlistedDomain(hostname) || isTrustedTopDomain(hostname) || (paymentBrands || []).some(brand =>
     (brand.domains || []).some(d => {
       const brandRoot = getDomain(d) || d;
       return hostname === d || hostname.endsWith('.' + d) || currentRootDomain === brandRoot;
     })
   );
+
+  // If hostname itself is an allowlisted domain, trusted top domain, or embedded media player,
+  // it is not a phishing site trying to impersonate payment brands.
+  if (isAllowlistedDomain(hostname) || isTrustedTopDomain(hostname) || isEmbeddedMediaHost(hostname)) {
+    return {
+      officialDomainMatch: true,
+      domainMismatch: false,
+      isTrustedProvider: true
+    };
+  }
 
   if (!claimedProviderObj) {
     return {
@@ -242,6 +259,27 @@ export function analyzePaymentPage(url, domSignals, paymentBrands) {
   const hostname = safeHostname(url);
   const fields = domSignals.paymentFields || {};
 
+  const isEmbeddedMedia = isEmbeddedMediaHost(hostname);
+  const hasActualPaymentInputs = !!(
+    fields.card ||
+    fields.cvv ||
+    fields.expiry ||
+    fields.upi ||
+    fields.pin ||
+    fields.otp ||
+    domSignals.hasPasswordInput ||
+    domSignals.hasCredentialCollection ||
+    domSignals.illegalWebPinCollection
+  );
+  const hasActualPaymentForm = !!(domSignals.hasPaymentForm);
+
+  // Exemption for embedded video players and official media domains:
+  // If it's an embedded media player without actual payment input fields or forms,
+  // it's just video content / tutorial / review mentioning brands—ignore completely!
+  if (isEmbeddedMedia && !hasActualPaymentInputs && !hasActualPaymentForm) {
+    return null;
+  }
+
   // 1. Payment intent
   const intentResult = detectPaymentIntent(domSignals);
 
@@ -265,14 +303,19 @@ export function analyzePaymentPage(url, domSignals, paymentBrands) {
                         (fields.otp || fields.card || fields.cvv || domSignals.hasPasswordInput) &&
                         !isAllowlistedDomain(hostname);
 
+  const hasPaymentOrCredentialDemand = hasActualPaymentInputs || hasActualPaymentForm || !!(
+    domSignals.hasPasswordInput ||
+    domSignals.hasCredentialCollection ||
+    domSignals.loginFormCount > 0
+  );
+
   const hasCyberFraudSignal = !!(
     domSignals.illegalWebPinCollection ||
     domSignals.unverifiedUpiCollection ||
     domSignals.maliciousQrPayload ||
-    domSignals.maliciousQrPayload ||
     domSignals.highPressureTimer ||
-    (domSignals.claimedProviders && domSignals.claimedProviders.length > 0) ||
-    (domSignals.brandAssetUrls && domSignals.brandAssetUrls.length > 0)
+    (domSignals.brandAssetUrls && domSignals.brandAssetUrls.length > 0) ||
+    ((domSignals.claimedProviders && domSignals.claimedProviders.length > 0) && hasPaymentOrCredentialDemand)
   );
 
   if (!intentResult.isPaymentPage && !isUpiTrap && !isDigitalScam && !hasCyberFraudSignal) return null;
@@ -329,8 +372,21 @@ export function analyzePaymentPage(url, domSignals, paymentBrands) {
     });
   }
 
+  // Guard brand mismatch emission: only fire if page actually has payment intent, payment form,
+  // payment inputs, or active cyber fraud signals—NEVER on passive embedded media or casual text references!
+  const canTriggerBrandMismatch = !isEmbeddedMedia && (
+    intentResult.isPaymentPage ||
+    hasActualPaymentInputs ||
+    hasActualPaymentForm ||
+    isUpiTrap ||
+    isDigitalScam ||
+    (domSignals.brandAssetUrls && domSignals.brandAssetUrls.length > 0) ||
+    domSignals.illegalWebPinCollection ||
+    domSignals.unverifiedUpiCollection
+  );
+
   // 1. Strict PSL Payment Brand Mismatch (+75 pts)
-  if (providerResult.claimedProvider && domainResult.domainMismatch) {
+  if (providerResult.claimedProvider && domainResult.domainMismatch && canTriggerBrandMismatch) {
     paymentScore += 75;
     structuredReasons.push({
       id: 'SIG_PAYMENT_BRAND_MISMATCH',
@@ -340,7 +396,7 @@ export function analyzePaymentPage(url, domSignals, paymentBrands) {
   }
 
   // Fake payment brand impersonation (legacy compatibility)
-  if (providerResult.claimedProvider && domainResult.domainMismatch) {
+  if (providerResult.claimedProvider && domainResult.domainMismatch && canTriggerBrandMismatch) {
     paymentScore += 50;
     structuredReasons.push({
       id: 'PAYMENT_FAKE_PROVIDER',
@@ -390,7 +446,7 @@ export function analyzePaymentPage(url, domSignals, paymentBrands) {
   }
 
   // Official domain mismatch
-  if (domainResult.domainMismatch && providerResult.claimedProvider) {
+  if (domainResult.domainMismatch && providerResult.claimedProvider && canTriggerBrandMismatch) {
     paymentScore += 25;
     structuredReasons.push({
       id: 'PAYMENT_DOMAIN_MISMATCH',
@@ -439,7 +495,7 @@ export function analyzePaymentPage(url, domSignals, paymentBrands) {
 
   const isCriticalPaymentPhishing = (
     (!domainResult.officialDomainMatch && (fields.card || fields.cvv || fields.otp || fields.pin)) ||
-    (providerResult.claimedProvider && domainResult.domainMismatch) ||
+    (providerResult.claimedProvider && domainResult.domainMismatch && canTriggerBrandMismatch) ||
     isUpiTrap ||
     isDigitalScam ||
     domSignals.illegalWebPinCollection ||

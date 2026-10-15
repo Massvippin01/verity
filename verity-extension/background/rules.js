@@ -177,7 +177,7 @@ export function hasBrandNameInWrongDomain(urlString, brandsList) {
   }
 
   const hostname = url.hostname.toLowerCase();
-  if (isAllowlistedDomain(hostname)) {
+  if (isAllowlistedDomain(hostname) || isTrustedTopDomain(hostname)) {
     return { id: null, params: {}, score: 0, reason: null, triggered: false };
   }
   
@@ -271,7 +271,8 @@ export function isTrustedTopDomain(hostname) {
   if (!hostname) return false;
   const h = hostname.toLowerCase();
   const trustedList = [
-    'google.com', 'youtube.com', 'gmail.com', 'microsoft.com', 'login.microsoftonline.com',
+    'google.com', 'youtube.com', 'youtube-nocookie.com', 'youtu.be', 'vimeo.com', 'player.vimeo.com',
+    'dailymotion.com', 'twitch.tv', 'gmail.com', 'microsoft.com', 'login.microsoftonline.com',
     'live.com', 'office.com', 'apple.com', 'icloud.com', 'amazon.com',
     'facebook.com', 'meta.com', 'instagram.com', 'github.com', 'linkedin.com',
     'twitter.com', 'x.com', 'netflix.com', 'paypal.com', 'stripe.com',
@@ -280,6 +281,12 @@ export function isTrustedTopDomain(hostname) {
     'bing.com', 'wordpress.com', 'reddit.com'
   ];
   return trustedList.some(d => h === d || h.endsWith('.' + d));
+}
+
+export function isEmbeddedMediaHost(hostname) {
+  if (!hostname) return false;
+  const h = hostname.toLowerCase();
+  return /(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be|vimeo\.com|player\.vimeo\.com|dailymotion\.com|twitch\.tv|player\.twitch\.tv)$/i.test(h);
 }
 
 /**

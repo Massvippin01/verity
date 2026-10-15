@@ -12,6 +12,69 @@ import { isAllowlistedDomain } from '../../shared/legit-domains.js';
 const downloadSessions = new Map();
 const CLEANUP_DELAY_MS = 5 * 60 * 1000; // 5 min
 
+// User-approved downloads to prevent re-pausing after user clicks "Download Anyway"
+export const userApprovedDownloadIds = new Set();
+
+export async function hydrateApprovedDownloads() {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
+      const data = await chrome.storage.session.get('userApprovedDownloadIds');
+      if (Array.isArray(data?.userApprovedDownloadIds)) {
+        for (const id of data.userApprovedDownloadIds) {
+          userApprovedDownloadIds.add(id);
+        }
+      }
+    }
+  } catch (_) {}
+}
+
+export async function approveDownload(downloadId) {
+  if (downloadId == null) return;
+  userApprovedDownloadIds.add(downloadId);
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
+      await chrome.storage.session.set({
+        userApprovedDownloadIds: Array.from(userApprovedDownloadIds)
+      });
+    }
+  } catch (_) {}
+}
+
+export function isDownloadApproved(downloadId) {
+  return userApprovedDownloadIds.has(downloadId);
+}
+
+export async function proceedAnyway(downloadId) {
+  if (downloadId == null) return { ok: false, error: 'Missing downloadId' };
+  await approveDownload(downloadId);
+  if (typeof chrome !== 'undefined' && chrome.downloads && chrome.downloads.resume) {
+    try {
+      await chrome.downloads.resume(downloadId);
+    } catch (e) {
+      console.warn('[Verity] Error resuming download:', e);
+    }
+  }
+  return { ok: true };
+}
+
+export async function cancelAndDelete(downloadId) {
+  if (downloadId == null) return { ok: false, error: 'Missing downloadId' };
+  if (typeof chrome !== 'undefined' && chrome.downloads) {
+    try {
+      if (chrome.downloads.cancel) {
+        await chrome.downloads.cancel(downloadId).catch(() => {});
+      }
+      if (chrome.downloads.erase) {
+        await chrome.downloads.erase({ id: downloadId }).catch(() => {});
+      }
+    } catch (e) {
+      console.warn('[Verity] Error cancelling/erasing download:', e);
+    }
+  }
+  cleanup(downloadId);
+  return { ok: true };
+}
+
 let _brandsList = [];
 let _calculateRisk = null;
 let _buildRuleSignals = null;
@@ -145,6 +208,7 @@ export function initDownloadMonitor({ brandsList, getBrandsList, calculateRisk, 
   if (getBrandsList) _brandsList = getBrandsList;
   _calculateRisk = calculateRisk;
   _buildRuleSignals = buildRuleSignals;
+  hydrateApprovedDownloads().catch(() => {});
   registerListeners();
 }
 
@@ -182,6 +246,11 @@ function registerListeners() {
 export async function handleDeterminingFilename(downloadItem, suggest) {
   try {
     const id = downloadItem.id;
+    if (userApprovedDownloadIds.has(id)) {
+      if (typeof suggest === 'function') suggest();
+      return;
+    }
+
     const resolvedName = getBasename(downloadItem.filename, downloadItem.url);
     const resolvedExt = getFileExtension(resolvedName);
     const isContentDispositionSpoofed = checkContentDispositionSpoof(downloadItem.url, downloadItem.finalUrl, resolvedName);
@@ -190,7 +259,7 @@ export async function handleDeterminingFilename(downloadItem, suggest) {
     const isRiskySmuggle = smugglingInfo.isSmuggling && (isDangerousExtension(resolvedExt) || isArchiveExtension(resolvedExt));
 
     // Pause immediately if dangerous resolved extension, spoofed, or smuggled
-    if (isContentDispositionSpoofed || isDangerousExtension(resolvedExt) || isRiskySmuggle) {
+    if ((isContentDispositionSpoofed || isDangerousExtension(resolvedExt) || isRiskySmuggle) && !userApprovedDownloadIds.has(id)) {
       if (typeof chrome !== 'undefined' && chrome.downloads && chrome.downloads.pause) {
         await chrome.downloads.pause(id).catch(() => {});
       }
@@ -223,6 +292,7 @@ export async function handleDeterminingFilename(downloadItem, suggest) {
 }
 
 export async function handleFilenameChange(delta) {
+  if (userApprovedDownloadIds.has(delta.id)) return;
   if (typeof chrome === 'undefined' || !chrome.downloads || !chrome.downloads.search) return;
   const [item] = await chrome.downloads.search({ id: delta.id });
   if (!item) return;
@@ -234,7 +304,7 @@ export async function handleFilenameChange(delta) {
   const smugglingInfo = await checkHtmlSmuggling(item);
   const isRiskySmuggle = smugglingInfo.isSmuggling && (isDangerousExtension(resolvedExt) || isArchiveExtension(resolvedExt));
 
-  if (isContentDispositionSpoofed || isDangerousExtension(resolvedExt) || isRiskySmuggle) {
+  if ((isContentDispositionSpoofed || isDangerousExtension(resolvedExt) || isRiskySmuggle) && !userApprovedDownloadIds.has(delta.id)) {
     if (typeof chrome !== 'undefined' && chrome.downloads && chrome.downloads.pause) {
       await chrome.downloads.pause(delta.id).catch(() => {});
     }
@@ -259,6 +329,8 @@ export async function handleFilenameChange(delta) {
 
 async function handleDownloadCreated(downloadItem) {
   const id = downloadItem.id;
+  if (userApprovedDownloadIds.has(id)) return;
+
   const basename = getBasename(downloadItem.filename, downloadItem.url);
   const ext = getFileExtension(basename);
 
@@ -270,7 +342,7 @@ async function handleDownloadCreated(downloadItem) {
   const isRemoteAccessTool = remoteTools.some(t => basename.toLowerCase().includes(t));
 
   // If HTML smuggling, remote desktop tool, or dangerous extension, pause immediately
-  if (isRiskySmuggle || isDangerousExtension(ext) || isRemoteAccessTool) {
+  if ((isRiskySmuggle || isDangerousExtension(ext) || isRemoteAccessTool) && !userApprovedDownloadIds.has(id)) {
     if (typeof chrome !== 'undefined' && chrome.downloads && chrome.downloads.pause) {
       await chrome.downloads.pause(id).catch(() => {});
     }
@@ -391,7 +463,8 @@ export async function runAnalysis(downloadItem, extraContext = {}) {
     ruleSignals
   );
 
-  const policy = await applyDownloadPolicy(id, verdict, downloadSignals);
+  const isApproved = userApprovedDownloadIds.has(id);
+  const policy = await applyDownloadPolicy(id, verdict, downloadSignals, isApproved);
 
   // Build detected signals list for UI
   const detectedSignals = buildSignalsList(downloadSignals);
@@ -400,12 +473,19 @@ export async function runAnalysis(downloadItem, extraContext = {}) {
   await notifyTab(downloadItem.tabId, {
     downloadId: id,
     filename: normalized.filename,
+    fileSize: normalized.fileSize,
+    mimeType: normalized.mimeType,
+    extension: downloadSignals.extension,
     sourceHostname: downloadSignals.sourceHostname,
     signals: detectedSignals,
+    trustSignals: downloadSignals.trustIndicators || [],
+    riskSignals: downloadSignals.riskSignals || [],
+    checklist: downloadSignals.checklist || [],
     riskScore: verdict.riskScore || 0,
     severity: verdict.severity || 'safe',
     action: policy.action,
-    cancelled: policy.cancelled,
+    paused: policy.paused || false,
+    cancelled: policy.cancelled || false,
     chromeSaysDangerous: downloadSignals.chromeSaysDangerous,
     redirectChain: downloadSignals.shortenerDetected ? (verdict.redirectChain || []) : null,
   });
@@ -517,3 +597,4 @@ export {
   getBasename,
   safeHostname
 };
+

@@ -21,25 +21,37 @@ export function validateMessageSender(sender, expectedRuntimeId, message) {
     'ANALYZE_FULL',
     'ANALYZE_SEARCH_RESULT',
     'USER_OVERRIDE_ALLOW',
+    'NAVIGATE_TO_SAFETY',
     'RUNTIME_THREAT_DETECTED'
   ];
 
   if (message && tabScopedActions.includes(message.action)) {
-    if (!sender.tab || sender.tab.id == null) {
+    const isInternalExtension = !sender.tab && (
+      (sender.url && sender.url.startsWith('chrome-extension://' + expectedRuntimeId)) ||
+      (sender.origin && sender.origin.startsWith('chrome-extension://' + expectedRuntimeId))
+    );
+
+    if (!isInternalExtension && (!sender.tab || sender.tab.id == null)) {
       return { valid: false, reason: `Action ${message.action} requires a valid sender tab` };
     }
 
     if (message.action === 'USER_OVERRIDE_ALLOW') {
-      if (message.tabId != null && message.tabId !== sender.tab.id) {
+      if (sender.tab && message.tabId != null && message.tabId !== sender.tab.id) {
         return { valid: false, reason: 'Tab ID mismatch in override request' };
       }
-      if (message.url && sender.tab.url) {
+      if (sender.tab && message.url && sender.tab.url) {
         try {
           const msgHost = new URL(message.url).hostname.toLowerCase();
           const tabHost = new URL(sender.tab.url).hostname.toLowerCase();
           if (msgHost !== tabHost) {
             return { valid: false, reason: 'URL hostname mismatch with sender tab' };
           }
+        } catch (e) {
+          return { valid: false, reason: 'Malformed URL in override request' };
+        }
+      } else if (message.url) {
+        try {
+          new URL(message.url);
         } catch (e) {
           return { valid: false, reason: 'Malformed URL in override request' };
         }

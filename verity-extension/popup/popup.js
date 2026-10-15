@@ -376,7 +376,8 @@ function initEventListeners() {
     if (!currentTab) return;
     chrome.runtime.sendMessage({
       action: 'USER_OVERRIDE_ALLOW',
-      url: currentTab.url
+      url: currentTab.url,
+      tabId: currentTab.id
     }, () => {
       // Re-render as safe
       renderVerdict({

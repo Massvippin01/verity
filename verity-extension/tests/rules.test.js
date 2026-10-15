@@ -179,6 +179,10 @@ test('Rule 13: isTrustedTopDomain', () => {
   // Trusted top domains
   assert.equal(isTrustedTopDomain('google.com'), true);
   assert.equal(isTrustedTopDomain('youtube.com'), true);
+  assert.equal(isTrustedTopDomain('youtube-nocookie.com'), true);
+  assert.equal(isTrustedTopDomain('www.youtube-nocookie.com'), true);
+  assert.equal(isTrustedTopDomain('youtu.be'), true);
+  assert.equal(isTrustedTopDomain('player.vimeo.com'), true);
   assert.equal(isTrustedTopDomain('microsoft.com'), true);
 
   // Untrusted / Phishing lookalike domains

@@ -8,7 +8,7 @@ let blockObserver = null;
 let statusBadgeHost = null;
 
 // ─── Step 2.1: Immediate Early Exit Check on Search Engines & Top Trusted Domains ─
-const TRUSTED_DOMAINS_REGEX = /(^|\.)(google\.[a-z.]+|bing\.com|duckduckgo\.com|yahoo\.com|brave\.com|youtube\.com|github\.com|microsoft\.com|live\.com|office\.com|apple\.com|amazon\.[a-z.]+|wikipedia\.org|reddit\.com|chatgpt\.com|openai\.com|claude\.ai|gemini\.google\.com|localhost|127\.0\.0\.1)$/i;
+const TRUSTED_DOMAINS_REGEX = /(^|\.)(google\.[a-z.]+|bing\.com|duckduckgo\.com|yahoo\.com|brave\.com|youtube\.com|youtube-nocookie\.com|youtu\.be|vimeo\.com|player\.vimeo\.com|dailymotion\.com|twitch\.tv|github\.com|microsoft\.com|live\.com|office\.com|apple\.com|amazon\.[a-z.]+|wikipedia\.org|reddit\.com|chatgpt\.com|openai\.com|claude\.ai|gemini\.google\.com|localhost|127\.0\.0\.1)$/i;
 
 function isTrustedSearchOrTopDomain(hostname) {
   if (!hostname || typeof hostname !== 'string') return false;
@@ -665,7 +665,8 @@ function collectSignals() {
   // Major trusted domains — skip aggressive credential/financial synergy scoring.
   const TRUSTED_DOMAINS = new Set([
     'github.com', 'google.com', 'microsoft.com', 'apple.com', 'amazon.com', 'amazon.in',
-    'youtube.com', 'facebook.com', 'instagram.com', 'twitter.com', 'x.com',
+    'youtube.com', 'youtube-nocookie.com', 'youtu.be', 'vimeo.com', 'player.vimeo.com', 'dailymotion.com', 'twitch.tv',
+    'facebook.com', 'instagram.com', 'twitter.com', 'x.com',
     'linkedin.com', 'reddit.com', 'stackoverflow.com', 'wikipedia.org',
     'netflix.com', 'spotify.com', 'discord.com', 'slack.com', 'notion.so',
     'dropbox.com', 'zoom.us', 'atlassian.com', 'gitlab.com', 'bitbucket.org',
@@ -808,8 +809,25 @@ function collectSignals() {
   // On-device QR / Quishing scan
   const qrScan = detectQrFromDomAttributes();
 
+  // Embedded media player and actual payment inputs check
+  const isEmbeddedMedia = /(^|\.)(youtube(-nocookie)?\.com|youtu\.be|vimeo\.com|player\.vimeo\.com|dailymotion\.com|twitch\.tv|player\.twitch\.tv)$/i.test(currentHostname);
+  const hasActualPaymentInputs = !!(
+    paymentFields.card ||
+    paymentFields.cvv ||
+    paymentFields.expiry ||
+    paymentFields.upi ||
+    paymentFields.pin ||
+    paymentFields.otp ||
+    hasPasswordInput ||
+    sensitiveInputs.length > 0
+  );
+
   // Claimed providers scan (using already-extracted text, no redundant read)
-  const claimedProviders = scanClaimedProviders(text);
+  // On trusted domains or embedded media players without payment inputs,
+  // do not extract casual brand text mentions into claimedProviders
+  const claimedProviders = (isTrustedDomain || (isEmbeddedMedia && !hasActualPaymentInputs))
+    ? []
+    : scanClaimedProviders(text);
 
   return {
     hasPasswordInput: isTrustedDomain ? false : hasPasswordInput,
@@ -836,7 +854,7 @@ function collectSignals() {
     paymentFields: isTrustedDomain ? {} : paymentFields,
     hasPaymentForm: isTrustedDomain ? false : hasPaymentForm,
     claimedProviders,
-    brandAssetUrls,
+    brandAssetUrls: (isTrustedDomain || isEmbeddedMedia) ? [] : brandAssetUrls,
     techSupportRemoteScam: isTrustedDomain ? false : techSupportScam.detected,
     techSupportRemoteScamReason: isTrustedDomain ? null : techSupportScam.reason,
     techSupportHelpline: isTrustedDomain ? null : (techSupportScam.tool + ' ' + techSupportScam.lure),
@@ -2212,6 +2230,41 @@ function showPopupBlockedToast(hostname) {
   startTimer();
 }
 
+function defuseTransparentClickjackOverlays() {
+  if (typeof document === 'undefined') return;
+  try {
+    const allCandidates = querySelectorAllDeep('div, a, span, iframe');
+    const vw = window.innerWidth || (document.documentElement ? document.documentElement.clientWidth : 0);
+    const vh = window.innerHeight || (document.documentElement ? document.documentElement.clientHeight : 0);
+    if (!vw || !vh) return;
+
+    for (const el of allCandidates) {
+      if (el.id && String(el.id).startsWith('verity-')) continue;
+      const style = window.getComputedStyle ? window.getComputedStyle(el) : el.style;
+      if (!style) continue;
+      const pos = style.position;
+      if (pos === 'fixed' || pos === 'absolute') {
+        const zIndex = parseInt(style.zIndex, 10);
+        if (zIndex >= 999) {
+          const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+          if (rect && rect.width >= vw * 0.75 && rect.height >= vh * 0.75) {
+            const opacity = parseFloat(style.opacity);
+            const isTransparent = opacity < 0.08 ||
+              style.backgroundColor === 'transparent' ||
+              style.backgroundColor.includes('rgba(0, 0, 0, 0)') ||
+              style.backgroundColor.includes('rgba(255, 255, 255, 0)');
+            const textContent = (el.textContent || '').trim();
+            if (isTransparent && textContent.length < 25) {
+              el.style.setProperty('pointer-events', 'none', 'important');
+              el.style.setProperty('display', 'none', 'important');
+            }
+          }
+        }
+      }
+    }
+  } catch (_) {}
+}
+
 function handleEnforcementVerdict(verdict) {
   if (!verdict) return;
   if (isTrustedHostEnvironment) return;
@@ -2279,6 +2332,11 @@ if (!isTrustedHostEnvironment) {
         }).catch(() => {});
       }
 
+      if (signal === 'SIG_POPUNDER_SPAWN') {
+        showPopupBlockedToast(detail.hostname || detail.blockedUrl || 'Pop-up window');
+        return;
+      }
+
       const threatScore = 95;
       const threatVerdict = {
         action: 'block',
@@ -2305,15 +2363,18 @@ if (!isTrustedHostEnvironment) {
 
   triggerImmediateUrlScan();
   initSpaMutationObserver();
+  defuseTransparentClickjackOverlays();
 
   if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
         initSpaMutationObserver();
+        defuseTransparentClickjackOverlays();
         triggerFullScan();
       });
     } else {
       initSpaMutationObserver();
+      defuseTransparentClickjackOverlays();
       triggerFullScan();
     }
   }
@@ -2322,79 +2383,471 @@ if (!isTrustedHostEnvironment) {
 // ─── Download Warning Modal ─────────────────────────────────────────────────
 let downloadWarningHost = null;
 
+const VERITY_DOWNLOAD_MODAL_CSS = `
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif !important;
+  }
+  :host {
+    all: initial;
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 2147483645;
+    pointer-events: auto;
+    max-width: 440px;
+    width: calc(100vw - 32px);
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif !important;
+    color-scheme: dark;
+  }
+  .v-dw-card-v2 {
+    background: #141416;
+    color: #f4f4f5;
+    border-radius: 12px;
+    border: 1px solid #27272a;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    line-height: 1.4;
+    animation: vDwSlideIn 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  @keyframes vDwSlideIn {
+    from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .v-dw-header-v2 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .v-dw-title-row-v2 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .v-dw-title-v2 {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: #fafafa;
+  }
+  .v-badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+  .v-badge-pill-danger {
+    background: rgba(220, 38, 38, 0.2);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+  }
+  .v-badge-pill-caution {
+    background: rgba(217, 119, 6, 0.2);
+    color: #fde68a;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+  }
+  .v-inspect-card {
+    background: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .v-inspect-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+  }
+  .v-ext-badge {
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+    background: #27272a;
+    color: #e4e4e7;
+    border: 1px solid #3f3f46;
+  }
+  .v-ext-badge-media {
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+    border-color: rgba(59, 130, 246, 0.4);
+  }
+  .v-ext-badge-exe {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.4);
+  }
+  .v-ext-badge-archive {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fde68a;
+    border-color: rgba(245, 158, 11, 0.4);
+  }
+  .v-filename-mono {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace !important;
+    font-size: 12px;
+    color: #fafafa;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+  .v-size-pill {
+    font-size: 11px;
+    color: #a1a1aa;
+    background: #27272a;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .v-source-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #a1a1aa;
+  }
+  .v-source-host {
+    color: #d4d4d8;
+    font-weight: 500;
+  }
+  .v-chk-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 150px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .v-chk-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    line-height: 1.35;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: #18181b;
+    border: 1px solid #27272a;
+  }
+  .v-chk-icon {
+    flex-shrink: 0;
+    margin-top: 1px;
+    display: inline-flex;
+  }
+  .v-chk-text {
+    color: #e4e4e7;
+    flex: 1;
+  }
+  .v-chk-pass .v-chk-text {
+    color: #dcfce7;
+  }
+  .v-chk-warn .v-chk-text {
+    color: #fef3c7;
+  }
+  .v-chk-fail .v-chk-text {
+    color: #fee2e2;
+  }
+  .v-score-row-v2 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #a1a1aa;
+    padding-top: 4px;
+    border-top: 1px solid #27272a;
+  }
+  .v-score-val-v2 {
+    font-weight: 700;
+    font-size: 12px;
+  }
+  .v-score-danger {
+    color: #ef4444;
+  }
+  .v-score-caution {
+    color: #f59e0b;
+  }
+  .v-score-safe {
+    color: #22c55e;
+  }
+  .v-dw-actions-v2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+  }
+  .v-btn-action {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif !important;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 120ms ease;
+    line-height: 1;
+  }
+  .v-btn-action-danger {
+    background: #dc2626;
+    color: #ffffff;
+    border-color: #b91c1c;
+  }
+  .v-btn-action-danger:hover {
+    background: #b91c1c;
+  }
+  .v-btn-action-override {
+    background: transparent;
+    color: #e4e4e7;
+    border-color: #3f3f46;
+  }
+  .v-btn-action-override:hover {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.5);
+    color: #fde68a;
+  }
+  .v-btn-action-primary {
+    background: #27272a;
+    color: #fafafa;
+    border-color: #3f3f46;
+  }
+  .v-btn-action-primary:hover {
+    background: #3f3f46;
+  }
+  .v-link-action {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif !important;
+    background: none;
+    border: none;
+    color: #71717a;
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0 4px;
+    margin-left: auto;
+  }
+  .v-link-action:hover {
+    color: #a1a1aa;
+  }
+`;
+
 function injectDownloadWarning(payload) {
   removeDownloadWarning();
 
-  const { filename, sourceHostname, signals, riskScore, severity, action, cancelled, chromeSaysDangerous } = payload;
-  const isDanger = severity === 'danger' || action === 'block';
+  const {
+    downloadId,
+    filename,
+    fileSize,
+    extension,
+    sourceHostname,
+    signals,
+    trustSignals,
+    checklist: rawChecklist,
+    riskScore,
+    severity,
+    action,
+    cancelled,
+    paused,
+    chromeSaysDangerous
+  } = payload || {};
+
+  const isDanger = (severity === 'danger') || (action === 'block') || (riskScore >= 70) || !!paused;
+  const isCaution = !isDanger && ((severity === 'caution') || (action === 'warn') || (riskScore >= 40));
 
   const host = document.createElement('div');
   host.id = 'verity-download-warning-host';
-  host.style.cssText = 'all:initial;position:fixed;top:24px;right:24px;z-index:2147483645;pointer-events:auto;max-width:400px;width:calc(100vw - 32px);';
+  host.style.cssText = 'all:initial;position:fixed;top:24px;right:24px;z-index:2147483645;pointer-events:auto;max-width:440px;width:calc(100vw - 32px);font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif !important;';
   downloadWarningHost = host;
 
   const shadow = host.attachShadow({ mode: 'open' });
 
   const styleEl = document.createElement('style');
-  styleEl.textContent = VERITY_UI_CSS;
+  styleEl.textContent = VERITY_DOWNLOAD_MODAL_CSS;
   shadow.appendChild(styleEl);
 
+  // File extension badge formatting
+  let cleanExt = extension || '';
+  if (!cleanExt && filename) {
+    const clean = filename.split('?')[0].split('#')[0];
+    const dot = clean.lastIndexOf('.');
+    if (dot >= 0) cleanExt = clean.slice(dot);
+  }
+  cleanExt = cleanExt.toLowerCase();
+  const extBadge = cleanExt ? cleanExt.toUpperCase().replace(/^\./, '') : 'FILE';
+  let extBadgeClass = 'v-ext-badge';
+  if (['.mp4', '.mkv', '.avi', '.mov', '.webm', '.mp3', '.flac', '.jpg', '.png', '.webp', '.pdf', '.srt'].includes(cleanExt)) {
+    extBadgeClass += ' v-ext-badge-media';
+  } else if (['.exe', '.msi', '.apk', '.bat', '.ps1', '.scr', '.vbs', '.js', '.hta', '.lnk'].includes(cleanExt)) {
+    extBadgeClass += ' v-ext-badge-exe';
+  } else if (['.zip', '.rar', '.7z', '.tar', '.gz', '.iso', '.img', '.vhd', '.dmg'].includes(cleanExt)) {
+    extBadgeClass += ' v-ext-badge-archive';
+  }
+
+  // File size formatting
+  const formattedSize = (typeof fileSize === 'number' && fileSize > 0)
+    ? (fileSize < 1024 ? fileSize + ' B'
+      : fileSize < 1024 * 1024 ? (fileSize / 1024).toFixed(1) + ' KB'
+      : fileSize < 1024 * 1024 * 1024 ? (fileSize / (1024 * 1024)).toFixed(1) + ' MB'
+      : (fileSize / (1024 * 1024 * 1024)).toFixed(2) + ' GB')
+    : '';
+
+  // Checklist compilation
+  const checklist = [];
+  if (Array.isArray(rawChecklist) && rawChecklist.length > 0) {
+    for (const item of rawChecklist) {
+      if (item && item.text) checklist.push(item);
+    }
+  } else {
+    if (Array.isArray(trustSignals)) {
+      for (const t of trustSignals) {
+        checklist.push({ type: 'pass', text: String(t) });
+      }
+    }
+    if (Array.isArray(signals)) {
+      for (const s of signals) {
+        checklist.push({ type: isDanger ? 'fail' : 'warn', text: String(s) });
+      }
+    }
+  }
+
+  const modalTitle = isDanger
+    ? (chromeSaysDangerous ? 'Dangerous File Blocked' : 'Download Paused for Your Protection')
+    : 'Unverified Download Source';
+
+  const badgeText = isDanger ? 'High Risk • Paused' : 'Caution';
+  const badgeClass = isDanger ? 'v-badge-pill-danger' : 'v-badge-pill-caution';
+
   const card = document.createElement('div');
-  card.className = `v-dw-card ${isDanger ? 'v-card-danger' : 'v-card-warning'}`;
+  card.className = 'v-dw-card-v2';
   card.innerHTML = `
-    <div class="v-dw-header">
-      <div class="v-dw-title-row">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${isDanger ? '#ef4444' : '#f59e0b'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-        <span class="v-dw-title">${isDanger ? (chromeSaysDangerous ? 'Dangerous File Blocked' : 'High-Risk Download Blocked') : 'Suspicious Download Detected'}</span>
+    <div class="v-dw-header-v2">
+      <div class="v-dw-title-row-v2">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="${isDanger ? '#ef4444' : '#f59e0b'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          ${isDanger
+            ? '<line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'
+            : '<line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'
+          }
+        </svg>
+        <span class="v-dw-title-v2">${escapeHtml(modalTitle)}</span>
       </div>
-      <span class="v-badge ${isDanger ? 'v-badge-danger' : 'v-badge-caution'}">${isDanger ? 'Blocked' : 'Warning'}</span>
+      <span class="v-badge-pill ${badgeClass}">${escapeHtml(badgeText)}</span>
     </div>
 
-    <div class="v-dw-meta">
-      <div class="v-dw-row">
-        <span class="v-dw-label">File:</span>
-        <span class="v-chip-mono">${escapeHtml(filename || 'Unknown')}</span>
+    <div class="v-inspect-card">
+      <div class="v-inspect-row">
+        <span class="${extBadgeClass}">${escapeHtml(extBadge)}</span>
+        <span class="v-filename-mono" title="${escapeHtml(filename || 'Unknown file')}">${escapeHtml(filename || 'Unknown file')}</span>
+        ${formattedSize ? `<span class="v-size-pill">${escapeHtml(formattedSize)}</span>` : ''}
       </div>
-      <div class="v-dw-row">
-        <span class="v-dw-label">Source:</span>
-        <span class="v-chip-mono">${escapeHtml(sourceHostname || 'Unknown')}</span>
+      <div class="v-source-row">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <span class="v-source-host">${escapeHtml(sourceHostname || 'Unknown origin')}</span>
       </div>
     </div>
 
-    ${signals && signals.length > 0 ? `
-      <div class="v-scroll" style="max-height: 120px; display: flex; flex-direction: column; gap: 6px;">
-        ${signals.map(s => `
-          <div class="verity-tag" style="padding: 6px 10px; font-size: 12px;">
-            <span class="v-reason-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span>
-            <span class="v-reason-text">${escapeHtml(String(s))}</span>
+    ${checklist.length > 0 ? `
+      <div class="v-chk-list">
+        ${checklist.map(item => `
+          <div class="v-chk-item v-chk-${item.type || 'warn'}">
+            <span class="v-chk-icon">
+              ${item.type === 'pass'
+                ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+                : item.type === 'fail'
+                ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+                : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+              }
+            </span>
+            <span class="v-chk-text">${escapeHtml(item.text)}</span>
           </div>
         `).join('')}
       </div>
     ` : ''}
 
-    <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--v-muted-fg);padding-top:4px;">
+    <div class="v-score-row-v2">
       <span>Evaluation score:</span>
-      <span style="font-weight:700;color:${isDanger ? 'var(--v-destructive)' : 'var(--v-warning)'};">${riskScore || 0}/100</span>
+      <span class="v-score-val-v2 ${isDanger ? 'v-score-danger' : isCaution ? 'v-score-caution' : 'v-score-safe'}">${riskScore || 0}/100</span>
     </div>
 
-    ${cancelled ? '<div class="v-payment-alert" style="margin-bottom:0;padding:8px 12px;font-size:12px;">Download cancelled automatically by Verity.</div>' : ''}
-
-    <div class="v-dialog-actions" style="margin-bottom:0;margin-top:6px;">
-      ${!cancelled ? '<button type="button" class="v-btn v-btn-ghost v-btn-sm" id="dw-open-dl">View downloads</button>' : ''}
-      <button type="button" class="v-btn v-btn-primary v-btn-sm" id="dw-dismiss">Dismiss</button>
+    <div class="v-dw-actions-v2">
+      ${isDanger ? `
+        <button type="button" class="v-btn-action v-btn-action-danger" id="dw-cancel-delete">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          Cancel &amp; Delete
+        </button>
+        <button type="button" class="v-btn-action v-btn-action-override" id="dw-resume-anyway">
+          Download Anyway
+        </button>
+      ` : `
+        <button type="button" class="v-btn-action v-btn-action-primary" id="dw-dismiss">
+          Dismiss
+        </button>
+      `}
+      <button type="button" class="v-link-action" id="dw-open-dl">
+        View in Downloads
+      </button>
     </div>
   `;
 
   shadow.appendChild(card);
 
+  // Action listeners
+  shadow.getElementById('dw-cancel-delete')?.addEventListener('click', () => {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({
+        action: 'DOWNLOAD_CANCEL_AND_DELETE',
+        downloadId
+      }).catch(() => {});
+    }
+    removeDownloadWarning();
+  });
+
+  shadow.getElementById('dw-resume-anyway')?.addEventListener('click', () => {
+    const btn = shadow.getElementById('dw-resume-anyway');
+    if (btn) {
+      btn.textContent = 'Resuming download...';
+      btn.style.pointerEvents = 'none';
+      btn.style.opacity = '0.7';
+    }
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({
+        action: 'DOWNLOAD_PROCEED_ANYWAY',
+        downloadId
+      }).catch(() => {});
+    }
+    setTimeout(removeDownloadWarning, 600);
+  });
+
   shadow.getElementById('dw-dismiss')?.addEventListener('click', removeDownloadWarning);
+
   shadow.getElementById('dw-open-dl')?.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ action: 'OPEN_DOWNLOADS_PAGE' });
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ action: 'OPEN_CHROME_DOWNLOADS' }).catch(() => {});
+    }
   });
 
   (document.documentElement || document.body).appendChild(host);
 
-  // Auto-dismiss warn after 15s; danger stays until dismissed
+  // Auto-dismiss only on caution advisory after 15s; danger stays until user action
   if (!isDanger) setTimeout(removeDownloadWarning, 15000);
 }
 
@@ -2628,8 +3081,8 @@ function injectOverlay(verdict) {
         </div>
 
         <div class="v-dialog-actions">
-          <button type="button" class="v-btn v-btn-ghost v-btn-md" id="btn-proceed">${escapeHtml(typeof t === 'function' ? t('OVERLAY_BTN_PROCEED') : 'Continue anyway')}</button>
-          <button type="button" class="v-btn v-btn-primary v-btn-lg" id="btn-back">${escapeHtml(typeof t === 'function' ? t('OVERLAY_BTN_SAFETY') : 'Take me to safety')}</button>
+          <button type="button" class="v-btn v-btn-ghost v-btn-md" id="btn-proceed">${escapeHtml(typeof t === 'function' ? t('OVERLAY_BTN_PROCEED') : 'I understand the risk')}</button>
+          <button type="button" class="v-btn v-btn-primary v-btn-lg" id="btn-back">${escapeHtml(typeof t === 'function' ? t('OVERLAY_BTN_SAFETY') : 'Take me back to safety')}</button>
         </div>
 
         <div class="v-dialog-footer">
@@ -2659,7 +3112,7 @@ function injectOverlay(verdict) {
         <div class="v-cooldown-bar"><div class="v-cooldown-progress" id="v-cooldown-fill"></div></div>
 
         <div class="v-dialog-actions" style="margin-top: 16px;">
-          <button type="button" class="v-btn v-btn-outline v-btn-md" id="btn-confirm-cancel">${escapeHtml(typeof t === 'function' ? t('OVERLAY_CONFIRM_CANCEL') : 'Return to safety')}</button>
+          <button type="button" class="v-btn v-btn-outline v-btn-md" id="btn-confirm-cancel">${escapeHtml(typeof t === 'function' ? t('OVERLAY_CONFIRM_CANCEL') : 'Take me back to safety')}</button>
           <button type="button" class="v-btn v-btn-destructive v-btn-md" id="btn-confirm-proceed" disabled>${escapeHtml(typeof t === 'function' ? t('OVERLAY_CONFIRM_WAIT', { seconds: '1.5' }) : 'Please wait (1.5s)...')}</button>
         </div>
       </div>
@@ -2783,13 +3236,53 @@ function injectOverlay(verdict) {
   const cooldownFill = shadow.querySelector('#v-cooldown-fill');
   const btnConfirmProceed = shadow.querySelector('#btn-confirm-proceed');
 
-  shadow.querySelector('#btn-back')?.addEventListener('click', () => {
-    if (window.history.length > 1) {
-      window.history.back();
-    } else {
-      window.location.href = 'chrome://newtab/';
+  // ── Action Handlers: Take Me Back To Safety ──
+  function executeTakeMeToSafety() {
+    try { window.onbeforeunload = null; } catch (_) {}
+    isBlocked = false;
+    removeOverlay();
+
+    // 1. Notify background service worker to navigate tab back or close it safely via chrome.tabs API
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({
+        action: 'NAVIGATE_TO_SAFETY',
+        url: window.location.href,
+        historyLength: window.history.length
+      }).catch(() => {});
     }
-  });
+
+    // 2. Client-side immediate fallback
+    setTimeout(() => {
+      try {
+        if (window.history.length > 1) {
+          window.history.back();
+        } else {
+          window.close();
+        }
+      } catch (_) {}
+    }, 50);
+  }
+
+  shadow.querySelector('#btn-back')?.addEventListener('click', executeTakeMeToSafety);
+  shadow.querySelector('#btn-confirm-cancel')?.addEventListener('click', executeTakeMeToSafety);
+
+  // ── Action Handlers: I Understand Risk & Take Me There ──
+  function executeUnderstandRiskAndProceed() {
+    try { window.onbeforeunload = null; } catch (_) {}
+    isBlocked = false;
+    removeOverlay();
+
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({
+        action: 'USER_OVERRIDE_ALLOW',
+        url: window.location.href
+      }, () => {
+        window.location.reload();
+      });
+    } else {
+      window.location.reload();
+    }
+  }
 
   shadow.querySelector('#btn-proceed')?.addEventListener('click', () => {
     if (isDanger) {
@@ -2807,29 +3300,16 @@ function injectOverlay(verdict) {
         });
         setTimeout(() => {
           btnConfirmProceed.disabled = false;
-          btnConfirmProceed.textContent = typeof t === 'function' ? t('OVERLAY_CONFIRM_PROCEED') : 'I understand the risks, proceed';
+          btnConfirmProceed.textContent = typeof t === 'function' ? t('OVERLAY_CONFIRM_PROCEED') : 'I understand the risk and take me there';
         }, 1500);
       }
     } else {
-      // Direct caution override
-      isBlocked = false;
-      removeOverlay();
+      // Direct caution override: register user override in service worker so it stays safe!
+      executeUnderstandRiskAndProceed();
     }
   });
 
-  shadow.querySelector('#btn-confirm-cancel')?.addEventListener('click', () => {
-    confirmView.style.display = 'none';
-    mainView.style.display = 'flex';
-    shadow.querySelector('#btn-back')?.focus();
-  });
-
-  shadow.querySelector('#btn-confirm-proceed')?.addEventListener('click', () => {
-    isBlocked = false;
-    chrome.runtime.sendMessage({ action: 'USER_OVERRIDE_ALLOW', url: window.location.href }, () => {
-      removeOverlay();
-      window.location.reload();
-    });
-  });
+  shadow.querySelector('#btn-confirm-proceed')?.addEventListener('click', executeUnderstandRiskAndProceed);
 
   // Focus trap & Esc handling
   overlayWrap.addEventListener('keydown', (e) => {

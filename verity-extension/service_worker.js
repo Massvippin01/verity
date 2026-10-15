@@ -13,7 +13,7 @@ import { calculateRisk } from './background/risk-engine.js';
 import { getMlScore, initializeModel } from './background/ml-scorer.js';
 import { checkReputation } from './background/reputation.js';
 import { analyzePaymentPage } from './background/payment-detector.js';
-import { initDownloadMonitor } from './background/download/downloadMonitor.js';
+import { initDownloadMonitor, proceedAnyway, cancelAndDelete, hydrateApprovedDownloads } from './background/download/downloadMonitor.js';
 import { validateMessageSender } from './background/message-validator.js';
 import { isAllowlistedDomain } from './shared/legit-domains.js';
 import { initDnrBlocker } from './background/dnr-blocker.js';
@@ -161,6 +161,14 @@ async function runFullAnalysis(tabId, url, domSignals) {
 
   // Step 3.1: Force safe allow verdict on allowlisted / trusted top domains
   if (isSafeAllowlistedOrTopDomain(url)) {
+    pruneTabRiskState(tabId);
+    const safeVerdict = createSafeAllowVerdict(url);
+    await storeAndEnforce(tabId, safeVerdict, 0);
+    return safeVerdict;
+  }
+
+  // User explicitly bypassed warning ("I understand the risk and take me there")
+  if (isUserOverridden(tabId, url)) {
     pruneTabRiskState(tabId);
     const safeVerdict = createSafeAllowVerdict(url);
     await storeAndEnforce(tabId, safeVerdict, 0);
@@ -436,6 +444,19 @@ function checkPopunderMatch(sourceUrl, targetUrl) {
     lowerTarget.includes('propellerads') ||
     lowerTarget.includes('popads') ||
     lowerTarget.includes('wigglepoploaderfast') ||
+    lowerTarget.includes('adsterra') ||
+    lowerTarget.includes('clickadu') ||
+    lowerTarget.includes('exoclick') ||
+    lowerTarget.includes('popcash') ||
+    lowerTarget.includes('hilltopads') ||
+    lowerTarget.includes('richads') ||
+    lowerTarget.includes('monetag') ||
+    lowerTarget.includes('galaksion') ||
+    lowerTarget.includes('bet365') ||
+    lowerTarget.includes('1xbet') ||
+    lowerTarget.includes('dafabet') ||
+    lowerTarget.includes('popunder') ||
+    lowerTarget.includes('onclick') ||
     /\?[a-f0-9]{16,64}/i.test(targetUrl);
 
   if (isExplicitAdRotator) {
@@ -473,6 +494,7 @@ chrome.webNavigation.onCreatedNavigationTarget.addListener(async (details) => {
         isPopunderTab: true,
         sourceDomain,
         targetDomain,
+        openerTabId: sourceTabId,
         maxRiskScore: 85,
         maxAction: 'block',
         maxSeverity: 'danger'
@@ -498,6 +520,20 @@ chrome.webNavigation.onCreatedNavigationTarget.addListener(async (details) => {
       verdict.state = 'danger';
       verdict.url = targetUrl;
       await storeAndEnforce(tabId, verdict, 0);
+
+      // Auto-terminate the rogue popup tab immediately!
+      if (chrome.tabs && chrome.tabs.remove) {
+        try {
+          await chrome.tabs.remove(tabId);
+        } catch (_) {}
+      }
+      if (sourceTabId) {
+        chrome.tabs.sendMessage(sourceTabId, {
+          action: 'POPUP_BLOCKED_TOAST',
+          blockedUrl: targetUrl,
+          hostname: targetDomain
+        }).catch(() => {});
+      }
     }
   }
 });
@@ -515,6 +551,11 @@ chrome.tabs.onCreated.addListener(async (tab) => {
       timeStamp: Date.now()
     });
 
+    await saveTabRiskState(tab.id, {
+      openerTabId,
+      createdAt: Date.now()
+    });
+
     if (targetUrl && !isInternalUrl(targetUrl) && targetUrl !== 'about:blank') {
       let sourceUrl = '';
       try {
@@ -525,6 +566,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
       if (checkPopunderMatch(sourceUrl, targetUrl)) {
         await saveTabRiskState(tab.id, {
           isPopunderTab: true,
+          openerTabId,
           maxRiskScore: 85,
           maxAction: 'block',
           maxSeverity: 'danger'
@@ -552,6 +594,13 @@ chrome.tabs.onCreated.addListener(async (tab) => {
       verdict.riskScore = verdict.score;
       await storeAndEnforce(tab.id, verdict, 0);
 
+      // Auto-terminate the rogue popup tab/window immediately!
+      if (chrome.tabs && chrome.tabs.remove) {
+        try {
+          await chrome.tabs.remove(tab.id);
+        } catch (_) {}
+      }
+
       // Notify opener tab toast if opened as pop-up window
       let host = urlToCheck;
       try { host = new URL(urlToCheck).hostname; } catch (e) {}
@@ -577,6 +626,26 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   pruneTabRiskState(tabId);
 });
 
+// Pop-up window terminator
+if (typeof chrome !== 'undefined' && chrome.windows && chrome.windows.onCreated) {
+  chrome.windows.onCreated.addListener(async (win) => {
+    if (win.type === 'popup' && win.id) {
+      try {
+        const tabs = await chrome.tabs.query({ windowId: win.id });
+        for (const t of tabs) {
+          if (t.id) {
+            const state = await getTabRiskState(t.id);
+            if (state && (state.isPopunderTab || state.maxAction === 'block')) {
+              await chrome.windows.remove(win.id);
+              break;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Development-only allowlist gate for local harness debugging.
 // Strictly FALSE in shipped production builds.
@@ -586,12 +655,46 @@ export const ENABLE_DEV_ALLOWLIST = false;
 const userOverrideTabs = new Set();
 const userOverrideDomains = new Set();
 
-function isUserOverridden(tabId, url) {
-  if (tabId && userOverrideTabs.has(tabId)) return true;
+export function persistUserOverrides() {
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
+    chrome.storage.session.set({
+      verity_override_tabs: Array.from(userOverrideTabs),
+      verity_override_domains: Array.from(userOverrideDomains)
+    }).catch(() => {});
+  }
+}
+
+export async function rehydrateUserOverrides() {
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
+    try {
+      const data = await chrome.storage.session.get(['verity_override_tabs', 'verity_override_domains']);
+      if (data && Array.isArray(data.verity_override_tabs)) {
+        data.verity_override_tabs.forEach(t => {
+          userOverrideTabs.add(t);
+          if (typeof t === 'number') userOverrideTabs.add(String(t));
+          if (typeof t === 'string' && !isNaN(Number(t))) userOverrideTabs.add(Number(t));
+        });
+      }
+      if (data && Array.isArray(data.verity_override_domains)) {
+        data.verity_override_domains.forEach(d => userOverrideDomains.add(d));
+      }
+    } catch (_) {}
+  }
+}
+
+rehydrateUserOverrides();
+
+export function isUserOverridden(tabId, url) {
+  if (tabId && (userOverrideTabs.has(tabId) || userOverrideTabs.has(Number(tabId)) || userOverrideTabs.has(String(tabId)))) {
+    return true;
+  }
   if (url) {
     try {
       const host = new URL(url).hostname.toLowerCase();
-      if (userOverrideDomains.has(host)) return true;
+      const root = getDomain(host) || host;
+      if (userOverrideDomains.has(host) || userOverrideDomains.has(root)) {
+        return true;
+      }
     } catch (e) {}
   }
   return false;
@@ -704,6 +807,27 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
     maxSeverity: quickVerdict.severity,
     lastVerdict: quickVerdict
   });
+
+  // If this top-level navigation is in a spawned popup tab and reached BLOCK or is a popunder,
+  // automatically terminate the spawned tab so it doesn't pop up!
+  if (frameId === 0 && (quickVerdict.action === 'block' || tabState?.isPopunderTab)) {
+    const openerId = tabState?.openerTabId;
+    if (openerId) {
+      let host = url;
+      try { host = new URL(url).hostname; } catch (_) {}
+      if (chrome.tabs && chrome.tabs.remove) {
+        try {
+          await chrome.tabs.remove(tabId);
+        } catch (_) {}
+      }
+      chrome.tabs.sendMessage(openerId, {
+        action: 'POPUP_BLOCKED_TOAST',
+        blockedUrl: url,
+        hostname: host
+      }).catch(() => {});
+      return;
+    }
+  }
 
   // Subframe rule: only enforce if dangerous (block threshold) to avoid disturbing clean embeds
   if (frameId !== 0 && quickVerdict.action !== 'block') {
@@ -997,31 +1121,153 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === 'USER_OVERRIDE_ALLOW') {
-    // User chose to proceed past warning — clear the block permanently for this tab and domain
-    if (tabId) {
-      userOverrideTabs.add(tabId);
-      if (message.url) {
+    // User chose to proceed past warning ("I understand the risk and take me there")
+    const targetTabId = tabId || (sender.tab ? sender.tab.id : null) || message.tabId;
+    const targetUrl = message.url || (sender.tab ? sender.tab.url : '');
+
+    if (targetTabId) {
+      const numTabId = typeof targetTabId === 'string' ? parseInt(targetTabId, 10) : targetTabId;
+      userOverrideTabs.add(numTabId);
+      userOverrideTabs.add(String(numTabId));
+
+      let host = '';
+      let root = '';
+      if (targetUrl) {
         try {
-          const host = new URL(message.url).hostname.toLowerCase();
+          host = new URL(targetUrl).hostname.toLowerCase();
+          root = getDomain(host) || host;
           userOverrideDomains.add(host);
+          userOverrideDomains.add(root);
         } catch (e) {}
       }
 
+      // Persist user overrides in session storage so service worker restarts don't lose them
+      persistUserOverrides();
+
+      // Prune previous sticky risk states
+      pruneTabRiskState(targetTabId);
+      pruneTab(targetTabId);
+
       const entry = {};
-      entry[tabId.toString()] = { action: 'allow', severity: 'safe', state: 'safe', score: 0, riskScore: 0, reasons: [], signals: [] };
-      chrome.storage.session.set(entry).then(() => {
-        sendResponse({ success: true });
-      }).catch(() => {
-        sendResponse({ success: false });
-      });
-      updateBadge(tabId, { severity: 'safe' });
+      entry[targetTabId.toString()] = {
+        action: 'allow',
+        severity: 'safe',
+        state: 'safe',
+        score: 0,
+        riskScore: 0,
+        reasons: [],
+        signals: [],
+        userOverridden: true
+      };
+
+      if (chrome.storage && chrome.storage.session) {
+        chrome.storage.session.set(entry).then(() => {
+          sendResponse({ success: true, tabId: targetTabId, host });
+        }).catch(() => {
+          sendResponse({ success: true, tabId: targetTabId, host });
+        });
+      } else {
+        sendResponse({ success: true, tabId: targetTabId, host });
+      }
+
+      updateBadge(targetTabId, { severity: 'safe' });
+    } else {
+      sendResponse({ success: false, reason: 'Missing target tab ID' });
     }
     return true; // Keep channel open for async response
   }
 
-  // Popup asks for current verdict
-  if (message.action === 'OPEN_DOWNLOADS_PAGE') {
-    chrome.tabs.create({ url: 'chrome://downloads/' }).catch(() => {});
+  if (message.action === 'NAVIGATE_TO_SAFETY') {
+    // User clicked "Take me back to safety"
+    const targetTabId = tabId || (sender.tab ? sender.tab.id : null) || message.tabId;
+    if (!targetTabId) {
+      sendResponse({ success: false });
+      return false;
+    }
+
+    pruneTabRiskState(targetTabId);
+    pruneTab(targetTabId);
+
+    if (chrome.tabs) {
+      chrome.tabs.get(targetTabId, async (tab) => {
+        if (chrome.runtime.lastError || !tab) {
+          sendResponse({ success: false });
+          return;
+        }
+
+        // 1. Try history back navigation via tabs API
+        if (chrome.tabs.goBack) {
+          try {
+            await chrome.tabs.goBack(targetTabId);
+            sendResponse({ success: true, method: 'goBack' });
+            return;
+          } catch (_) {
+            // Cannot go back in history
+          }
+        }
+
+        // 2. If it's a popunder or spawned new tab (and multiple tabs exist in window), close it
+        if (chrome.tabs.query && chrome.tabs.remove) {
+          try {
+            const tabsInWindow = await chrome.tabs.query({ windowId: tab.windowId });
+            if (tabsInWindow && tabsInWindow.length > 1) {
+              await chrome.tabs.remove(targetTabId);
+              sendResponse({ success: true, method: 'closed' });
+              return;
+            }
+          } catch (_) {}
+        }
+
+        // 3. Fallback: navigate the tab to safe chrome://newtab or default search
+        if (chrome.tabs.update) {
+          try {
+            await chrome.tabs.update(targetTabId, { url: 'chrome://newtab/' });
+            sendResponse({ success: true, method: 'newtab' });
+            return;
+          } catch (_) {
+            try {
+              await chrome.tabs.update(targetTabId, { url: 'https://www.google.com' });
+              sendResponse({ success: true, method: 'fallback_google' });
+              return;
+            } catch (_) {}
+          }
+        }
+
+        sendResponse({ success: false });
+      });
+      return true; // Keep message channel open for async response
+    }
+
+    sendResponse({ success: false });
+    return false;
+  }
+
+  // Download action handlers
+  if (message.action === 'DOWNLOAD_PROCEED_ANYWAY') {
+    const downloadId = message.downloadId != null ? message.downloadId : (message.payload && message.payload.downloadId);
+    proceedAnyway(downloadId).then(res => {
+      sendResponse(res || { ok: true });
+    }).catch(err => {
+      sendResponse({ ok: false, error: String(err) });
+    });
+    return true; // Keep channel open
+  }
+
+  if (message.action === 'DOWNLOAD_CANCEL_AND_DELETE') {
+    const downloadId = message.downloadId != null ? message.downloadId : (message.payload && message.payload.downloadId);
+    cancelAndDelete(downloadId).then(res => {
+      sendResponse(res || { ok: true });
+    }).catch(err => {
+      sendResponse({ ok: false, error: String(err) });
+    });
+    return true; // Keep channel open
+  }
+
+  if (message.action === 'OPEN_CHROME_DOWNLOADS' || message.action === 'OPEN_DOWNLOADS_PAGE') {
+    if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.create) {
+      chrome.tabs.create({ url: 'chrome://downloads/' }).catch(() => {});
+    }
+    sendResponse({ ok: true });
     return false;
   }
 
@@ -1072,6 +1318,7 @@ loadBrands().catch(() => {});
 loadPaymentBrands().catch(() => {});
 loadUrlShorteners().catch(() => {});
 hydrateFromStorage().catch(() => {});
+hydrateApprovedDownloads().catch(() => {});
 
 // ---------------------------------------------------------------------------
 // Download Monitor Initialization

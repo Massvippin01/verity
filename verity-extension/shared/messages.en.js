@@ -197,8 +197,8 @@
     OVERLAY_SUMMARY_NEUTRAL: () => 'This site showed warning signs that are common on unsafe pages.',
     OVERLAY_SUMMARY_CAUTION: () => 'This site exhibits unusual patterns or unconfirmed security details. Exercise caution before interacting with it.',
 
-    OVERLAY_BTN_SAFETY: () => 'Take me to safety',
-    OVERLAY_BTN_PROCEED: () => 'Continue anyway',
+    OVERLAY_BTN_SAFETY: () => 'Take me back to safety',
+    OVERLAY_BTN_PROCEED: () => 'I understand the risk',
     OVERLAY_WHY_FLAGGED: (p) => `Why we flagged this (${p?.count || 0})`,
     OVERLAY_RISK_SCORE_LABEL: () => 'Risk score',
     OVERLAY_PROTECTED_BY: () => 'Protected by VERITY Web Protection',
@@ -206,8 +206,8 @@
     OVERLAY_CONFIRM_TITLE: () => 'Are you sure you want to proceed?',
     OVERLAY_CONFIRM_BADGE: () => 'High Risk Confirmation',
     OVERLAY_CONFIRM_DESC: (p) => `This site is classified as ${p?.state || 'dangerous'}. Bypassing protection exposes you to potential credential theft, phishing, or financial risk.`,
-    OVERLAY_CONFIRM_CANCEL: () => 'Return to safety',
-    OVERLAY_CONFIRM_PROCEED: () => 'I understand the risks, proceed',
+    OVERLAY_CONFIRM_CANCEL: () => 'Take me back to safety',
+    OVERLAY_CONFIRM_PROCEED: () => 'I understand the risk and take me there',
     OVERLAY_CONFIRM_WAIT: (p) => `Please wait (${p?.seconds || '1.5'}s)...`,
 
     // ── Search Result Badges & Tooltips (Phase UI-1.2) ─────────────────────────
