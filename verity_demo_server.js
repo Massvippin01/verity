@@ -408,6 +408,17 @@ const server = http.createServer((req, res) => {
   res.end('Not found');
 });
 
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌ Error: Port ${PORT} is already in use by another instance.`);
+    console.error(`👉 To free port ${PORT}, run in PowerShell:`);
+    console.error(`   Stop-Process -Id (Get-NetTCPConnection -LocalPort ${PORT}).OwningProcess -Force\n`);
+    process.exit(1);
+  } else {
+    throw err;
+  }
+});
+
 server.listen(PORT, () => {
   console.log(`\n=======================================================`);
   console.log(`🚀 Verity Demo Server running at http://localhost:${PORT}`);
