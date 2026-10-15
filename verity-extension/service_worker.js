@@ -1142,7 +1142,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === 'ANALYZE_SEARCH_RESULT') {
-    analyzeSearchResult(message.url, sender.tab.id).then(verdict => {
+    const tabId = sender && sender.tab ? sender.tab.id : null;
+    analyzeSearchResult(message.url, tabId).then(verdict => {
       sendResponse({ verdict });
     }).catch(err => {
       console.error('[Verity] Error in analyzeSearchResult:', err);

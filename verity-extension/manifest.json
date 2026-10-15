@@ -85,6 +85,7 @@
         "payment-brands.json",
         "config/*",
         "content/search/*",
+        "content/search/engines/*",
         "content/main-world-interceptor.js"
       ],
       "matches": ["<all_urls>"]
