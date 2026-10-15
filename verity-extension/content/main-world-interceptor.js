@@ -82,10 +82,26 @@
     }
   }
 
-  function isExfilEndpoint(urlStr) {
-    if (!urlStr || typeof urlStr !== 'string') return null;
-    const lower = urlStr.toLowerCase();
-    return EXFIL_ENDPOINTS.find(ep => lower.includes(ep)) || null;
+  function isMalvertisingRotatorBridge(urlStr) {
+    if (!urlStr || typeof urlStr !== 'string') return false;
+    try {
+      const u = new URL(urlStr, window.location.href);
+      const fullPath = u.pathname + u.search;
+      if (fullPath.length > 300 || /[A-Za-z0-9_\-*%]{80,}/.test(u.pathname)) {
+        return true;
+      }
+      if (/^\?[a-f0-9]{16,64}$/i.test(u.search)) {
+        return true;
+      }
+      const segments = u.pathname.split('/').filter(Boolean);
+      const hasMixedSeg = segments.some(s => s.length >= 10 && s.length <= 35 && /[A-Z]/.test(s) && /[a-z]/.test(s) && /[0-9]/.test(s));
+      const hasNumericCampaign = segments.some(s => /^[0-9]{4,10}$/.test(s));
+      const hasParamN = Array.from(u.searchParams.keys()).some(k => /^param_[0-9]+$/i.test(k));
+      if (hasMixedSeg && (hasNumericCampaign || hasParamN)) {
+        return true;
+      }
+    } catch (_) {}
+    return false;
   }
 
   function notifyThreat(signal, detail = {}) {
@@ -94,6 +110,12 @@
         detail: { signal, ...detail }
       }));
     } catch (_) {}
+  }
+
+  // Immediate synchronous halt at document_start for malvertising rotator bridges
+  if (typeof window !== 'undefined' && window.location && isMalvertisingRotatorBridge(window.location.href)) {
+    try { window.stop(); } catch (_) {}
+    notifyThreat('SIG_MALVERTISING_REDIRECT', { blockedUrl: window.location.href, reason: 'Malvertising rotator bridge halted at document_start' });
   }
 
   function captureSelectedAddress() {
@@ -398,5 +420,34 @@
       return origClick.apply(this, arguments);
     };
   }
+
+  // ── 10. Intercept rapid client-side location redirects ───────────────────
+  try {
+    if (typeof window !== 'undefined' && window.location) {
+      const origReplace = window.location.replace.bind(window.location);
+      window.location.replace = function (targetUrl) {
+        if (isMalvertisingRotatorBridge(targetUrl) || (typeof isRoguePopupTarget === 'function' && isRoguePopupTarget(targetUrl, ''))) {
+          try { window.stop(); } catch (_) {}
+          notifyThreat('SIG_MALVERTISING_REDIRECT', { blockedUrl: targetUrl });
+          return;
+        }
+        return origReplace(targetUrl);
+      };
+    }
+  } catch (_) {}
+
+  try {
+    if (typeof window !== 'undefined' && window.location) {
+      const origAssign = window.location.assign.bind(window.location);
+      window.location.assign = function (targetUrl) {
+        if (isMalvertisingRotatorBridge(targetUrl) || (typeof isRoguePopupTarget === 'function' && isRoguePopupTarget(targetUrl, ''))) {
+          try { window.stop(); } catch (_) {}
+          notifyThreat('SIG_MALVERTISING_REDIRECT', { blockedUrl: targetUrl });
+          return;
+        }
+        return origAssign(targetUrl);
+      };
+    }
+  } catch (_) {}
 
 })();

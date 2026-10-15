@@ -69,8 +69,8 @@ export function calculateRisk(
   };
 
   // Helper to register an emitted signal
-  const emitSignal = (id, params = {}, score = 0, source = 'url') => {
-    const category = SIGNAL_CATEGORY_MAP[id] || 'url';
+  const emitSignal = (id, params = {}, score = 0, source = 'url', explicitCat = null) => {
+    const category = explicitCat || SIGNAL_CATEGORY_MAP[id] || 'url';
     const reasonText = t(id, params);
     rawSignals.push({
       id,
@@ -253,7 +253,7 @@ export function calculateRisk(
   // ── 4b. Process Redirect Protection Signals ────────────────────────────────
   if (redirectSignals && redirectSignals.structuredReasons && Array.isArray(redirectSignals.structuredReasons)) {
     redirectSignals.structuredReasons.forEach(r => {
-      emitSignal(r.id, r.params || {}, r.score || 0, r.source || 'redirect');
+      emitSignal(r.id, r.params || {}, r.score || 0, r.source || 'redirect', r.category);
     });
   }
 
@@ -495,6 +495,7 @@ export function calculateRisk(
   const hasMalvertisingCriticalOverride =
     (pointsByCategory['malvertising'] || 0) >= 50 ||
     rawSignals.some(s => s.id === 'SIG_POPUNDER_SPAWN') ||
+    rawSignals.some(s => s.id === 'SIG_MALVERTISING_REDIRECT') ||
     (redirectSignals && (redirectSignals.popunderSpawn || redirectSignals.popunderDetected)) ||
     ((hasPopunderAdKeyword || isHexQuery) && hasSuspiciousTld);
 

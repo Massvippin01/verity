@@ -295,6 +295,30 @@ const server = http.createServer((req, res) => {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // DEMO I — Malvertising Rotator Fast Redirect Trap
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (req.url.startsWith('/demo/rotator-bridge')) {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(`<!DOCTYPE html><html><head><title>Rotator Bridge</title>
+<script>
+  window.location.href = '/demo/rotator-destination/iI0156mcDUnDMLQ/151718?param_4=1721489&param_5=5033194268461371774';
+</script>
+</head><body>
+<p>Redirecting to landing page...</p>
+</body></html>`);
+  }
+
+  if (req.url.startsWith('/demo/rotator-destination')) {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(`<!DOCTYPE html><html><head><title>Malvertising Landing Page</title>
+<style>body{font-family:sans-serif;background:#111;color:#fff;text-align:center;padding:50px}</style>
+</head><body>
+<h1>Malvertising Destination Lander</h1>
+<p>This destination was reached via a multi-hop ad rotator parameter sequence.</p>
+</body></html>`);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // HUB DASHBOARD
   // ═══════════════════════════════════════════════════════════════════════════
   if (req.url === '/' || req.url === '/favicon.ico') {
@@ -369,6 +393,12 @@ const server = http.createServer((req, res) => {
     <div class="card-desc">Simulated Google Search page demonstrating green safe, yellow caution, and red danger badges.</div>
     <div class="expected">Expected: <b>🟢 🟡 🔴 BADGES</b> — In-page search result reputation badges</div>
     <a class="btn" href="/demo/google-search" target="_blank">Launch Search Badge Demo</a>
+  </div>
+  <div class="card">
+    <div class="card-title">🔄 Malvertising Fast Redirect (Demo I)</div>
+    <div class="card-desc">Simulates real-world rotator bridges (werefilledwit.org) that instantly client-redirect via inline script. Verity synchronously halts the parser and displays the block overlay.</div>
+    <div class="expected">Expected: <b>🔴 BLOCK</b> — Synchronously halted &amp; Block Overlay shown</div>
+    <a class="btn" href="/demo/rotator-bridge/RVV1SzVqahY4CBACBSZgAhseHgRwPyN5cxYARwFmHxNEGm8pAFMqVzFoQW1HIDFIehM2OEh6A2M+SG1DeGRbeAFrZk1lAmMmATgIdXMFOVt4ZVMuWCdoRW1BLDFIegJ3ZEFzDGMnDTIIdGBGfWp9Y0FtXCs2SHMTMGhEcwF9YEFyBHFtRHMCcWFEbVQiMBZ2BHJsRHMFcGFMeRMjJkh6EzcwE3ZdMSEFOBB2FFB5c2BnMy9aMjsZJFQhexgkQywwBjtUIjBbM0w" target="_blank">Launch Rotator Demo</a>
   </div>
 </div>
 </body></html>`);

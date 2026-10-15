@@ -403,15 +403,35 @@ export function hasMalvertisingPattern(urlString) {
     score += 25;
   }
 
-  // F. Mixed-case alphanumeric tracking token in path
+  // F. Mixed-case alphanumeric tracking token in path (single token or multi-segment rotator shard)
   const pathClean = url.pathname.replace(/^\/|\/$/g, '');
-  if (/^[A-Za-z0-9_-]{8,35}$/.test(pathClean)) {
-    const hasUpper = /[A-Z]/.test(pathClean);
-    const hasLower = /[a-z]/.test(pathClean);
-    const hasNum = /[0-9]/.test(pathClean);
-    if ((hasUpper && hasLower && hasNum) || (hasUpper && hasNum && pathClean.length >= 10)) {
-      score += 45;
-    }
+  const segments = url.pathname.split('/').filter(Boolean);
+
+  const isMixedCaseToken = (str) => {
+    if (!str || str.length < 8 || str.length > 35) return false;
+    if (!/^[A-Za-z0-9_-]+$/.test(str)) return false;
+    const hasUpper = /[A-Z]/.test(str);
+    const hasLower = /[a-z]/.test(str);
+    const hasNum = /[0-9]/.test(str);
+    return (hasUpper && hasLower && hasNum) || (hasUpper && hasNum && str.length >= 10);
+  };
+
+  const hasMixedCaseSegment = segments.some(seg => isMixedCaseToken(seg));
+  const hasNumericCampaignSegment = segments.some(seg => /^[0-9]{4,10}$/.test(seg));
+
+  if (isMixedCaseToken(pathClean)) {
+    score += 45;
+  } else if (hasMixedCaseSegment && hasNumericCampaignSegment) {
+    score += 50;
+  } else if (hasMixedCaseSegment) {
+    score += 35;
+  }
+
+  // G. Numeric parameter sequence (param_1, param_2, param_4, param_5, etc.) or 64-bit tracker IDs
+  const paramNumbers = Array.from(url.searchParams.keys()).filter(k => /^param_[0-9]+$/i.test(k));
+  const hasLargeIntTracker = Array.from(url.searchParams.values()).some(v => /^[0-9]{15,22}$/.test(v));
+  if (paramNumbers.length >= 2 || (paramNumbers.length >= 1 && hasLargeIntTracker)) {
+    score += 35;
   }
 
   if (score > 0) {
@@ -472,8 +492,12 @@ export function hasAffiliateTrackerPattern(urlString) {
 
   const uuidRegex = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
   const hashRegex = /^[a-f0-9]{32,64}$/i;
+  const largeIntRegex = /^[0-9]{15,22}$/;
   const hasUuidOrHashValue = queryValues.some(v => uuidRegex.test(v) || hashRegex.test(v));
+  const hasLargeIntValue = queryValues.some(v => largeIntRegex.test(v));
   
+  const paramNumberedKeys = queryKeys.filter(k => /^param_[0-9]+$/i.test(k) || /^sub_[0-9]+$/i.test(k) || /^aff_[a-z0-9]+$/i.test(k));
+
   const path = url.pathname.replace(/^\/|\/$/g, '');
   const pathIsUuid = uuidRegex.test(path);
 
@@ -481,7 +505,11 @@ export function hasAffiliateTrackerPattern(urlString) {
   if (presentGenericTrackers.length >= 3) score += 45;
   else if (presentGenericTrackers.length >= 1) score += 25;
 
+  if (paramNumberedKeys.length >= 2) score += 35;
+  else if (paramNumberedKeys.length === 1) score += 20;
+
   if (hasUuidOrHashValue) score += 30;
+  else if (hasLargeIntValue) score += 25;
   else if (pathIsUuid) score += 25;
 
   if (score >= 40) {

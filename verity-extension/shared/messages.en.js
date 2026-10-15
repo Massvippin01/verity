@@ -49,6 +49,7 @@
     SIG_URL_SUSPICIOUS: (p) => `URL structure exhibits suspicious patterns (${p?.details || 'heuristic signals'}).`,
     SIG_IP_HOST: (p) => 'Raw IP address host detected.',
     SIG_MALVERTISING: (p) => 'Malvertising or suspicious traffic redirection detected.',
+    SIG_MALVERTISING_REDIRECT: (p) => 'High risk: Arrived via an obfuscated malvertising redirect rotator bridge.',
     SIG_POPUNDER_SPAWN: (p) => `High risk: Pop-under tab automatically spawned to a different unverified domain (${p?.targetDomain || 'external'}).`,
     SIG_ML_PHISHING: (p) => `On-device ML model flagged structural phishing characteristics (${p?.confidence || 0}% confidence).`,
     SIG_BRAND_IMPERSONATION: (p) => `Brand impersonation detected: claims to be "${p?.brand || 'Brand'}".`,
@@ -255,6 +256,7 @@
     // Category: malvertising
     RULE_MALVERTISING_REDIRECT: 'malvertising',
     SIG_MALVERTISING: 'malvertising',
+    SIG_MALVERTISING_REDIRECT: 'malvertising',
     SIG_POPUNDER_SPAWN: 'malvertising',
     SIG_ROGUE_PUSH_OR_SW_TRAP: 'malvertising',
 

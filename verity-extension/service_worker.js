@@ -8,7 +8,7 @@
 
 import { isIpBasedUrl, hasMissingHttps, hasExcessiveSubdomains, hasBrandNameInWrongDomain, hasSuspiciousUrlPattern, hasPunycodeOrKeywords, hasFinancialKeywordInHostname, hasBrandVariantMatch, hasMalvertisingPattern, hasRandomLookingHostname, hasAffiliateTrackerPattern, hasPiracyOrUnverifiedMediaPattern, hasAitmProxyUrlSignature, isTrustedTopDomain } from './background/rules.js';
 import { detectTyposquatting } from './background/brand-detector.js';
-import { getRedirectSignals, getRedirectSignalsAsync, updateShorteners, recordNavigationTarget, hydrateFromStorage, pruneTab, isSuspiciousDomain } from './background/redirect-analyzer.js';
+import { getRedirectSignals, getRedirectSignalsAsync, updateShorteners, recordNavigationTarget, hydrateFromStorage, pruneTab, recordHop, isSuspiciousDomain } from './background/redirect-analyzer.js';
 import { calculateRisk } from './background/risk-engine.js';
 import { getMlScore, initializeModel } from './background/ml-scorer.js';
 import { checkReputation } from './background/reputation.js';
@@ -707,10 +707,21 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   const { tabId, url, frameId } = details;
   if (isInternalUrl(url)) return;
 
-  // Step 3.1: Whenever a tab navigates with frameId === 0, DELETE all stored risk state, pop-under flags, and signals for that tabId!
+  // Preserve redirect chains across fast consecutive hops (< 15 seconds), prune only on fresh session
+  let tabState = null;
   if (frameId === 0) {
-    pruneTabRiskState(tabId);
-    pruneTab(tabId);
+    const existingTabState = await getTabRiskState(tabId);
+    const now = Date.now();
+    const lastNavTime = existingTabState?.lastNavTime || 0;
+    const isConsecutiveHop = (now - lastNavTime) < 15000 && lastNavTime > 0;
+
+    if (!isConsecutiveHop) {
+      pruneTabRiskState(tabId);
+      pruneTab(tabId);
+    } else {
+      recordHop(tabId, url, false);
+      tabState = existingTabState;
+    }
   }
 
   // Step 3.1: If current tab's hostname is in legit_domains.js or isTrustedTopDomain, FORCE score 0, allow, safe
@@ -737,7 +748,9 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   if (!ruleSignals) return;
 
   const redirectSignals = await getRedirectSignalsAsync(tabId);
-  const tabState = await getTabRiskState(tabId);
+  if (!tabState) {
+    tabState = await getTabRiskState(tabId);
+  }
 
   if (tabState && tabState.isPopunderTab && redirectSignals) {
     if (!redirectSignals.structuredReasons) redirectSignals.structuredReasons = [];
@@ -764,15 +777,15 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   );
   quickVerdict.url = url;
 
-  // Sticky High-Water Mark Integration:
-  // ONLY merge if on the exact same hostname AND quickVerdict has reasons!
+  // Sticky High-Water Mark Integration (supports same-host and cross-host malvertising rotator redirects):
   if (tabState && quickVerdict.reasons && quickVerdict.reasons.length > 0) {
     try {
       const prevHost = tabState.url ? new URL(tabState.url).hostname.toLowerCase() : '';
       const curHost = new URL(url).hostname.toLowerCase();
-      if (prevHost && curHost && prevHost === curHost) {
+      const isRedirectChainTaint = !!(tabState.hasMalvertisingHop || tabState.isPopunderTab || redirectSignals?.structuredReasons?.some(r => r.id === 'SIG_MALVERTISING_REDIRECT'));
+      if ((prevHost && curHost && prevHost === curHost) || isRedirectChainTaint) {
         const prevMax = tabState.maxRiskScore || 0;
-        if (tabState.isPopunderTab || tabState.maxAction === 'block' || prevMax >= 70) {
+        if (tabState.isPopunderTab || tabState.maxAction === 'block' || prevMax >= 70 || isRedirectChainTaint) {
           quickVerdict.score = Math.max(quickVerdict.score, prevMax, 85);
           quickVerdict.riskScore = quickVerdict.score;
           quickVerdict.action = 'block';
@@ -800,8 +813,12 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
     quickVerdict.state = 'safe';
   }
 
+  const isMalvHop = !!(tabState?.hasMalvertisingHop || (quickVerdict.action === 'block' && quickVerdict.signals?.some(s => s.category === 'malvertising')) || (redirectSignals?.structuredReasons?.some(r => r.category === 'malvertising')));
+
   await saveTabRiskState(tabId, {
     url,
+    lastNavTime: Date.now(),
+    hasMalvertisingHop: isMalvHop,
     maxRiskScore: Math.max(tabState?.maxRiskScore || 0, quickVerdict.score),
     maxAction: quickVerdict.action,
     maxSeverity: quickVerdict.severity,
@@ -991,16 +1008,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       );
       verdict.url = url;
 
+      const isRedirectChainTaint = !!(tabState?.hasMalvertisingHop || tabState?.isPopunderTab || redirectSignals?.structuredReasons?.some(r => r.id === 'SIG_MALVERTISING_REDIRECT'));
       if (tabState && verdict.reasons && verdict.reasons.length > 0) {
         try {
           const prevHost = tabState.url ? new URL(tabState.url).hostname.toLowerCase() : '';
           const curHost = new URL(url).hostname.toLowerCase();
-          if (prevHost && curHost && prevHost === curHost) {
+          if ((prevHost && curHost && prevHost === curHost) || isRedirectChainTaint) {
             const prevMax = tabState.maxRiskScore || 0;
-            if (prevMax > verdict.score || tabState.maxAction === 'block' || tabState.isPopunderTab) {
-              verdict.score = Math.max(verdict.score, prevMax, tabState.isPopunderTab ? 85 : 0);
+            if (prevMax > verdict.score || tabState.maxAction === 'block' || tabState.isPopunderTab || isRedirectChainTaint) {
+              verdict.score = Math.max(verdict.score, prevMax, 85);
               verdict.riskScore = verdict.score;
-              if (tabState.maxAction === 'block' || tabState.isPopunderTab || prevMax >= 70) {
+              if (tabState.maxAction === 'block' || tabState.isPopunderTab || prevMax >= 70 || isRedirectChainTaint) {
                 verdict.action = 'block';
                 verdict.severity = 'danger';
                 verdict.state = 'danger';

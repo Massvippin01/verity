@@ -379,8 +379,9 @@ export function isSuspiciousDomain(url) {
   const hasAsterisk = pathname.includes('*');
   // Known ad-redirect path prefixes
   const hasAdPrefix = ['/cx/', '/rd/', '/redir/', '/click/', '/go/', '/track/'].some(p => pathname.startsWith(p));
+  const hasMalv = hasMalvertisingPattern(url).triggered;
 
-  return hasSuspiciousTLD || isIP || hasSubdomains || hasLongPath || hasAsterisk || hasAdPrefix;
+  return hasSuspiciousTLD || isIP || hasSubdomains || hasLongPath || hasAsterisk || hasAdPrefix || hasMalv;
 }
 
 function buildSignalsFromData(data) {
@@ -398,6 +399,8 @@ function buildSignalsFromData(data) {
   let crossDomainRedirectCount = 0;
   let httpsDowngrade = false;
   let suspiciousIntermediateDomain = false;
+  let hasMalvertisingHop = false;
+  let malvertisingHopSource = '';
   
   for (let i = 0; i < chain.length - 1; i++) {
     const currentUrl = chain[i];
@@ -415,10 +418,16 @@ function buildSignalsFromData(data) {
       httpsDowngrade = true;
     }
     
-    // Check intermediate domains (not first, not last)
-    if (i > 0 && i < chain.length - 1) {
-      if (isSuspiciousDomain(currentUrl)) {
-        suspiciousIntermediateDomain = true;
+    // Check intermediate/prior hops (any hop leading up to the final destination)
+    const isSusp = isSuspiciousDomain(currentUrl);
+    const malvResult = hasMalvertisingPattern(currentUrl);
+    const isMalv = malvResult && malvResult.triggered;
+
+    if (isSusp || isMalv) {
+      suspiciousIntermediateDomain = true;
+      hasMalvertisingHop = true;
+      if (!malvertisingHopSource) {
+        malvertisingHopSource = getHostname(currentUrl);
       }
     }
   }
@@ -439,6 +448,19 @@ function buildSignalsFromData(data) {
       params: {
         sourceDomain: data.popunderSourceDomain || 'external',
         targetDomain: data.popunderTargetDomain || ''
+      }
+    });
+  }
+
+  if (hasMalvertisingHop) {
+    structuredReasons.push({
+      id: 'SIG_MALVERTISING_REDIRECT',
+      score: 75,
+      category: 'malvertising',
+      source: 'redirect',
+      params: {
+        sourceDomain: malvertisingHopSource || 'external',
+        targetDomain: getHostname(finalUrl) || ''
       }
     });
   }

@@ -2353,12 +2353,52 @@ if (!isTrustedHostEnvironment) {
             ? 'Rogue push notification or service worker registration blocked.'
             : signal === 'SIG_UNTRUSTED_SCREEN_SHARE'
             ? 'Untrusted screen sharing capture attempt blocked.'
+            : signal === 'SIG_MALVERTISING_REDIRECT'
+            ? 'High-risk malvertising redirect rotator bridge blocked.'
             : 'Phishing kit credential exfiltration endpoint blocked.'
         ],
         signals: [{ id: signal, score: threatScore }]
       };
       injectOverlay(threatVerdict);
     });
+  }
+
+  function isImmediateMalvertisingRotator(urlStr) {
+    if (!urlStr || isTrustedHostEnvironment) return false;
+    try {
+      const u = new URL(urlStr);
+      const fullPath = u.pathname + u.search;
+      if (fullPath.length > 300 || /[A-Za-z0-9_\-*%]{80,}/.test(u.pathname)) {
+        return true;
+      }
+      if (/^\?[a-f0-9]{16,64}$/i.test(u.search)) {
+        return true;
+      }
+      const segments = u.pathname.split('/').filter(Boolean);
+      const hasMixedSeg = segments.some(s => s.length >= 10 && s.length <= 35 && /[A-Z]/.test(s) && /[a-z]/.test(s) && /[0-9]/.test(s));
+      const hasNumericCampaign = segments.some(s => /^[0-9]{4,10}$/.test(s));
+      const hasParamN = Array.from(u.searchParams.keys()).some(k => /^param_[0-9]+$/i.test(k));
+      if (hasMixedSeg && (hasNumericCampaign || hasParamN)) {
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  // Synchronous early defense against malvertising rotators & instant script redirects
+  if (typeof window !== 'undefined' && window.location && isImmediateMalvertisingRotator(window.location.href)) {
+    try { window.stop(); } catch (_) {}
+    const immediateVerdict = {
+      action: 'block',
+      severity: 'danger',
+      state: 'danger',
+      score: 95,
+      riskScore: 95,
+      url: window.location.href,
+      reasons: ['High-risk malvertising redirect or obfuscated pattern detected.'],
+      signals: [{ id: 'RULE_MALVERTISING_REDIRECT', score: 95, category: 'malvertising' }]
+    };
+    handleEnforcementVerdict(immediateVerdict);
   }
 
   triggerImmediateUrlScan();
