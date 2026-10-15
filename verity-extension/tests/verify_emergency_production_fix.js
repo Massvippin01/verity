@@ -59,15 +59,14 @@ test('Emergency Step 1: DeclarativeNetRequest rules are completely purged and re
 });
 
 test('Emergency Step 2: Trusted search & top domain regex correctly matches search engines and top sites', () => {
-  const TRUSTED_DOMAINS_REGEX = /(^|\.)(google\.[a-z.]+|bing\.com|duckduckgo\.com|yahoo\.com|brave\.com|youtube\.com|youtube-nocookie\.com|youtu\.be|vimeo\.com|player\.vimeo\.com|dailymotion\.com|twitch\.tv|github\.com|microsoft\.com|live\.com|office\.com|apple\.com|amazon\.[a-z.]+|wikipedia\.org|reddit\.com|chatgpt\.com|openai\.com|claude\.ai|gemini\.google\.com|localhost|127\.0\.0\.1)$/i;
+  const TRUSTED_DOMAINS_REGEX = /(^|\.)(google\.[a-z.]+|bing\.com|duckduckgo\.com|yahoo\.com|brave\.com|youtube\.com|youtube-nocookie\.com|youtu\.be|vimeo\.com|player\.vimeo\.com|dailymotion\.com|twitch\.tv|github\.com|microsoft\.com|live\.com|office\.com|apple\.com|amazon\.[a-z.]+|wikipedia\.org|reddit\.com|chatgpt\.com|openai\.com|claude\.ai|gemini\.google\.com)$/i;
 
   const validHosts = [
     'google.com', 'www.google.com', 'google.co.in', 'google.co.uk',
     'bing.com', 'www.bing.com', 'duckduckgo.com', 'yahoo.com',
     'github.com', 'youtube.com', 'youtube-nocookie.com', 'www.youtube-nocookie.com',
     'player.vimeo.com', 'vimeo.com', 'dailymotion.com', 'twitch.tv',
-    'amazon.com', 'amazon.in',
-    'localhost', '127.0.0.1'
+    'amazon.com', 'amazon.in'
   ];
 
   for (const host of validHosts) {
@@ -76,7 +75,8 @@ test('Emergency Step 2: Trusted search & top domain regex correctly matches sear
 
   const untrustedHosts = [
     'moviesda.soy', 'fastbytes.xyz', 'ufa168rss.live',
-    'not-google.com', 'fake-bank.xyz', 'propellerads.com'
+    'not-google.com', 'fake-bank.xyz', 'propellerads.com',
+    'localhost', '127.0.0.1'
   ];
 
   for (const host of untrustedHosts) {

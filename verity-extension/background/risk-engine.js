@@ -155,6 +155,10 @@ export function calculateRisk(
       emitSignal('SIG_KYC_CYBER_FRAUD', { phrase: domSignals.kycCyberFraudReason || 'Fake KYC lure' }, 80, 'dom');
       categories.scamFraud.flagged = true;
       categories.scamFraud.reason = domSignals.kycCyberFraudReason || 'Fake KYC/Aadhaar/PAN cyber fraud lure detected';
+      const lowerReason = (domSignals.kycCyberFraudReason || '').toLowerCase();
+      if (lowerReason.includes('electricity') || lowerReason.includes('digital arrest') || lowerReason.includes('cbi') || lowerReason.includes('police') || lowerReason.includes('disconnected')) {
+        emitSignal('SIG_DIGITAL_ARREST_SCAM', {}, 75, 'dom');
+      }
     }
     if (domSignals.phishingKitWebhookExfil) {
       emitSignal('SIG_PHISHING_KIT_WEBHOOK_EXFIL', { endpoint: domSignals.webhookExfilEndpoint || 'Telegram/Discord webhook' }, 95, 'threat_intel');
@@ -207,6 +211,13 @@ export function calculateRisk(
       emitSignal('SIG_SCAM_BONUS_LURE', { phrase: domSignals.scamBonusLurePhrase }, 55, 'dom');
       categories.scamFraud.flagged = true;
       categories.scamFraud.reason = domSignals.scamBonusLurePhrase || 'Fake bonus/reward lure detected';
+    }
+    if ((domSignals.hasUpiLink || domSignals.unverifiedUpiCollection) && !isAllowlisted) {
+      if (domSignals.scamBonusLure || domSignals.scam || (domSignals.financialMatches && (domSignals.financialMatches.includes('cashback') || domSignals.financialMatches.includes('upi')))) {
+        emitSignal('SIG_UPI_DEBIT_TRAP', {}, 75, 'dom');
+        categories.scamFraud.flagged = true;
+        categories.scamFraud.reason = 'UPI cashback or debit trap detected hiding a payment request';
+      }
     }
     if (domSignals.scam) {
       emitSignal('SIG_SCAM_LANGUAGE', { phrase: domSignals.scamReason }, 10, 'dom');

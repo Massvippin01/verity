@@ -981,6 +981,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false;
     }
 
+    if (ENABLE_DEV_ALLOWLIST && (url === 'http://localhost:3000/' || url === 'http://localhost:3000' || url === 'http://localhost:8080/' || url === 'http://localhost:8080')) {
+      const verdict = createSafeAllowVerdict(url);
+      storeAndEnforce(tabId, verdict, frameId);
+      sendResponse({ verdict });
+      return false;
+    }
+
     if (isUserOverridden(tabId, url)) {
       const verdict = createSafeAllowVerdict(url);
       storeAndEnforce(tabId, verdict, frameId);
@@ -1065,6 +1072,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'ANALYZE_FULL') {
     const targetTabId = sender.tab ? sender.tab.id : tabId;
     if (isSafeAllowlistedOrTopDomain(message.url)) {
+      const verdict = createSafeAllowVerdict(message.url);
+      if (targetTabId) storeAndEnforce(targetTabId, verdict, frameId);
+      sendResponse({ verdict });
+      return false;
+    }
+    if (ENABLE_DEV_ALLOWLIST && (message.url === 'http://localhost:3000/' || message.url === 'http://localhost:3000' || message.url === 'http://localhost:8080/' || message.url === 'http://localhost:8080')) {
       const verdict = createSafeAllowVerdict(message.url);
       if (targetTabId) storeAndEnforce(targetTabId, verdict, frameId);
       sendResponse({ verdict });

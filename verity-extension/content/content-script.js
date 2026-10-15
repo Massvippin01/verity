@@ -8,7 +8,7 @@ let blockObserver = null;
 let statusBadgeHost = null;
 
 // ─── Step 2.1: Immediate Early Exit Check on Search Engines & Top Trusted Domains ─
-const TRUSTED_DOMAINS_REGEX = /(^|\.)(google\.[a-z.]+|bing\.com|duckduckgo\.com|yahoo\.com|brave\.com|youtube\.com|youtube-nocookie\.com|youtu\.be|vimeo\.com|player\.vimeo\.com|dailymotion\.com|twitch\.tv|github\.com|microsoft\.com|live\.com|office\.com|apple\.com|amazon\.[a-z.]+|wikipedia\.org|reddit\.com|chatgpt\.com|openai\.com|claude\.ai|gemini\.google\.com|localhost|127\.0\.0\.1)$/i;
+const TRUSTED_DOMAINS_REGEX = /(^|\.)(google\.[a-z.]+|bing\.com|duckduckgo\.com|yahoo\.com|brave\.com|youtube\.com|youtube-nocookie\.com|youtu\.be|vimeo\.com|player\.vimeo\.com|dailymotion\.com|twitch\.tv|github\.com|microsoft\.com|live\.com|office\.com|apple\.com|amazon\.[a-z.]+|wikipedia\.org|reddit\.com|chatgpt\.com|openai\.com|claude\.ai|gemini\.google\.com)$/i;
 
 function isTrustedSearchOrTopDomain(hostname) {
   if (!hostname || typeof hostname !== 'string') return false;
@@ -343,7 +343,7 @@ function detectKycAndAadhaarPanFraud(text) {
     }
   }
 
-  const hasKycInText = lowerText.includes('pan card') || lowerText.includes('aadhaar') || lowerText.includes('kyc update') || lowerText.includes('cif number');
+  const hasKycInText = lowerText.includes('pan card') || lowerText.includes('aadhaar') || lowerText.includes('aadhar') || lowerText.includes('kyc update') || lowerText.includes('update kyc') || /\bkyc\b/i.test(lowerText) || lowerText.includes('cif number');
 
   if (matchedUrgency && (hasKycInput || hasKycInText)) {
     return {
@@ -809,6 +809,13 @@ function collectSignals() {
   // On-device QR / Quishing scan
   const qrScan = detectQrFromDomAttributes();
 
+  // Cyber fraud, UPI debit trap, illegal PIN, webhook exfil, and timer scans
+  const pinTrap = isTrustedDomain ? { detected: false } : detectIllegalWebPinCollection();
+  const upiTrap = isTrustedDomain ? { detected: false } : detectUnverifiedUpiAndQr(currentHostname);
+  const kycFraud = isTrustedDomain ? { detected: false } : detectKycAndAadhaarPanFraud(text);
+  const webhookExfil = isTrustedDomain ? { detected: false } : detectPhishingKitWebhookExfil(hasSensitiveInputs);
+  const highPressureTimer = isTrustedDomain ? false : detectHighPressureTimer(hasPaymentOrOtp);
+
   // Embedded media player and actual payment inputs check
   const isEmbeddedMedia = /(^|\.)(youtube(-nocookie)?\.com|youtu\.be|vimeo\.com|player\.vimeo\.com|dailymotion\.com|twitch\.tv|player\.twitch\.tv)$/i.test(currentHostname);
   const hasActualPaymentInputs = !!(
@@ -865,6 +872,14 @@ function collectSignals() {
     aitmReason: isTrustedDomain ? null : aitmDom.reason,
     maliciousQrPayload: isTrustedDomain ? false : (qrScan ? qrScan.detected : false),
     maliciousQrType: isTrustedDomain ? null : (qrScan ? qrScan.type : null),
+    illegalWebPinCollection: isTrustedDomain ? false : pinTrap.detected,
+    illegalWebPinReason: isTrustedDomain ? null : pinTrap.phrase,
+    unverifiedUpiCollection: isTrustedDomain ? false : upiTrap.detected,
+    kycCyberFraud: isTrustedDomain ? false : kycFraud.detected,
+    kycCyberFraudReason: isTrustedDomain ? null : kycFraud.phrase,
+    phishingKitWebhookExfil: isTrustedDomain ? false : webhookExfil.detected,
+    webhookExfilEndpoint: isTrustedDomain ? null : webhookExfil.endpoint,
+    highPressureTimer: isTrustedDomain ? false : highPressureTimer,
     hasUpiLink,
     pageText:  text.substring(0, 3000),
     pageTitle: (typeof document !== 'undefined' ? document.title : '') || '',

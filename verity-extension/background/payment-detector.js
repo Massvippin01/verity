@@ -52,7 +52,8 @@ function detectPaymentIntent(domSignals) {
   // Payment field presence is itself strong intent evidence
   const fields = domSignals.paymentFields || {};
   const hasPaymentFields = !!(fields.card || fields.cvv || fields.expiry ||
-                            fields.upi || fields.otp || fields.pin);
+                            fields.upi || fields.otp || fields.pin ||
+                            domSignals.hasUpiLink || domSignals.unverifiedUpiCollection);
 
   const hasPaymentForm = !!(domSignals.hasPaymentForm);
 
@@ -416,7 +417,7 @@ export function analyzePaymentPage(url, domSignals, paymentBrands) {
   }
 
   // 3. Untrusted UPI Deep-Link / Fake QR Collection (+55 pts)
-  if (domSignals.unverifiedUpiCollection && domainResult.domainMismatch) {
+  if ((domSignals.unverifiedUpiCollection || domSignals.hasUpiLink) && domainResult.domainMismatch) {
     paymentScore += 55;
     structuredReasons.push({
       id: 'SIG_UNVERIFIED_UPI_COLLECTION',
