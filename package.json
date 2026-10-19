@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "test": "npm --prefix verity-extension test",
+    "evaluate": "npm --prefix verity-extension run evaluate",
+    "judge": "npm --prefix verity-extension run judge",
+    "demo": "node verity_demo_server.js",
     "benchmark": "npm --prefix verity-extension run benchmark",
     "e2e": "npm --prefix verity-extension run e2e"
   }

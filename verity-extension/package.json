@@ -6,6 +6,9 @@
   "description": "Verity: Real-time on-device website security extension",
   "scripts": {
     "test": "node --test tests/**/*.test.js",
+    "evaluate": "node scripts/judge_live_evaluation.js",
+    "judge": "node scripts/judge_live_evaluation.js",
+    "demo": "node ../verity_demo_server.js",
     "benchmark": "node scripts/benchmark.js",
     "benchmark:fresh": "node scripts/benchmark_fresh.js",
     "e2e": "node scripts/e2e.js",
