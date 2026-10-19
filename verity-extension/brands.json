@@ -2139,5 +2139,81 @@
       "angelbroking",
       "angel-broking"
     ]
+  },
+  {
+    "name": "Steam",
+    "domains": [
+      "steampowered.com",
+      "steamcommunity.com"
+    ],
+    "variants": [
+      "steampowered",
+      "steamcommunity",
+      "steam-community",
+      "steam-trade",
+      "steam-gift"
+    ]
+  },
+  {
+    "name": "Epic Games",
+    "domains": [
+      "epicgames.com"
+    ],
+    "variants": [
+      "epicgames",
+      "epic-games",
+      "fortnite"
+    ]
+  },
+  {
+    "name": "Roblox",
+    "domains": [
+      "roblox.com"
+    ],
+    "variants": [
+      "roblox",
+      "roblx",
+      "roblox-login",
+      "robux-claim"
+    ]
+  },
+  {
+    "name": "Phantom",
+    "domains": [
+      "phantom.app"
+    ],
+    "variants": [
+      "phantom",
+      "phantom-wallet",
+      "phantom-extension"
+    ]
+  },
+  {
+    "name": "Intuit",
+    "domains": [
+      "intuit.com",
+      "turbotax.com",
+      "quickbooks.com"
+    ],
+    "variants": [
+      "intuit",
+      "turbotax",
+      "quickbooks",
+      "turbo-tax",
+      "quick-books"
+    ]
+  },
+  {
+    "name": "HMRC",
+    "domains": [
+      "gov.uk",
+      "hmrc.gov.uk"
+    ],
+    "variants": [
+      "hmrc",
+      "hmrc-tax-refund",
+      "hmrc-gov-uk"
+    ]
   }
 ]
+

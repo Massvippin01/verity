@@ -1,6 +1,7 @@
 import { getDomain, getPublicSuffix } from '../shared/psl.js';
 import { isAllowlistedDomain } from '../shared/legit-domains.js';
 import { t } from '../shared/messages.js';
+import { normalizeConfusables } from './homograph-detector.js';
 
 /**
  * Calculates the Levenshtein distance between two strings.
@@ -33,10 +34,11 @@ function levenshteinDistance(a, b) {
 
 /**
  * Normalizes a hostname for brand comparison.
- * Strips www. and the TLD if possible to compare the root word.
+ * Decodes punycode/confusables, strips www. and the TLD if possible to compare the root word.
  */
 function normalizeHostname(hostname) {
-  const clean = hostname.toLowerCase().replace(/^www\./, '');
+  const normalized = normalizeConfusables(hostname || '');
+  const clean = normalized.toLowerCase().replace(/^www\./, '');
   const domain = getDomain(clean);
   if (domain) {
     const suffix = getPublicSuffix(clean);
@@ -72,24 +74,41 @@ export function detectTyposquatting(urlString, brandsList) {
       }
     }
 
-    // Now check for typosquatting (Levenshtein distance <= 2)
+    // Now check for typosquatting using precision constraints:
+    // 1. Length delta guard: cannot insert or delete > 1 character
+    // 2. Relative edit distance ratio <= 0.20 (requires >= 80% character identity)
+    // 3. For short brands (len <= 4), forbid arbitrary single-letter substitutions
     for (const brand of brandsList) {
       const brandName = brand.name.toLowerCase().replace(/\s+/g, '');
-      
-      // If the brand name is too short, edit distance of 1 might trigger false positives (e.g. 'box' vs 'fox')
-      const threshold = brandName.length <= 4 ? 1 : 2;
-      
-      const distance = levenshteinDistance(normalizedHost, brandName);
-      
-      if (distance > 0 && distance <= threshold) {
-        return {
-          id: 'BRAND_TYPOSQUATTING',
-          params: { brand: brand.name, distance },
-          score: 85,
-          reason: t('BRAND_TYPOSQUATTING', { brand: brand.name, distance }),
-          triggered: true
-        };
+      const cleanHost = normalizedHost.replace(/[^a-z0-9]/g, '');
+      const cleanBrand = brandName.replace(/[^a-z0-9]/g, '');
+
+      if (!cleanHost || !cleanBrand || cleanHost === cleanBrand) continue;
+
+      const lenDiff = Math.abs(cleanHost.length - cleanBrand.length);
+      if (lenDiff > 1) continue; // Length difference too large to be a typosquat
+
+      const maxLen = Math.max(cleanHost.length, cleanBrand.length);
+      const distance = levenshteinDistance(cleanHost, cleanBrand);
+      if (distance === 0) continue;
+
+      // Require at least 80% character identity (relative ratio <= 0.20)
+      const relRatio = distance / maxLen;
+      if (relRatio > 0.20) continue;
+
+      // For short brands (len <= 4), single-letter substitutions are almost always
+      // independent dictionary words (e.g. fox vs Box, loom vs Zoom, viva vs Visa)
+      if (cleanBrand.length <= 4 && cleanHost.length === cleanBrand.length) {
+        continue;
       }
+
+      return {
+        id: 'BRAND_TYPOSQUATTING',
+        params: { brand: brand.name, distance },
+        score: 85,
+        reason: t('BRAND_TYPOSQUATTING', { brand: brand.name, distance }),
+        triggered: true
+      };
     }
     
   } catch (e) {}

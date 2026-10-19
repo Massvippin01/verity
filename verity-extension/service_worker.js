@@ -6,12 +6,13 @@
  *   → Reputation → ML → Risk Engine → Enforcement Decision
  */
 
-import { isIpBasedUrl, hasMissingHttps, hasExcessiveSubdomains, hasBrandNameInWrongDomain, hasSuspiciousUrlPattern, hasPunycodeOrKeywords, hasFinancialKeywordInHostname, hasBrandVariantMatch, hasMalvertisingPattern, hasRandomLookingHostname, hasAffiliateTrackerPattern, hasPiracyOrUnverifiedMediaPattern, hasAitmProxyUrlSignature, isTrustedTopDomain } from './background/rules.js';
+import { isIpBasedUrl, hasMissingHttps, hasExcessiveSubdomains, hasBrandNameInWrongDomain, hasSuspiciousUrlPattern, hasPunycodeOrKeywords, hasFinancialKeywordInHostname, hasBrandVariantMatch, hasMalvertisingPattern, hasRandomLookingHostname, hasAffiliateTrackerPattern, hasPiracyOrUnverifiedMediaPattern, hasAitmProxyUrlSignature, hasHomographAttack, isTrustedTopDomain } from './background/rules.js';
 import { detectTyposquatting } from './background/brand-detector.js';
 import { getRedirectSignals, getRedirectSignalsAsync, updateShorteners, recordNavigationTarget, hydrateFromStorage, pruneTab, recordHop, isSuspiciousDomain } from './background/redirect-analyzer.js';
 import { calculateRisk } from './background/risk-engine.js';
 import { getMlScore, initializeModel } from './background/ml-scorer.js';
-import { checkReputation } from './background/reputation.js';
+import { checkReputation, hydrateThreatStorage, syncThreatFeeds } from './background/reputation.js';
+import { checkDomainAge } from './background/domain-age.js';
 import { analyzePaymentPage } from './background/payment-detector.js';
 import { initDownloadMonitor, proceedAnyway, cancelAndDelete, hydrateApprovedDownloads } from './background/download/downloadMonitor.js';
 import { validateMessageSender } from './background/message-validator.js';
@@ -153,6 +154,7 @@ function buildRuleSignals(url) {
     hasAffiliateTrackerPattern(url),
     hasPiracyOrUnverifiedMediaPattern(url),
     hasAitmProxyUrlSignature(url),
+    hasHomographAttack(url, brandsList),
   ];
 }
 
@@ -191,11 +193,16 @@ async function runFullAnalysis(tabId, url, domSignals) {
   const ruleSignals = await analyzeUrl(url);
   if (!ruleSignals) return null;
 
-  // Parallel: ML score + reputation check
-  const [mlScore, threatIntel] = await Promise.allSettled([
+  // Parallel: ML score + reputation check + domain age RDAP
+  const [mlScore, threatIntel, domainAgeSignal] = await Promise.allSettled([
     getMlScore(url, domSignals),
     checkReputation(url),
+    checkDomainAge(url),
   ]);
+
+  if (domainAgeSignal.status === 'fulfilled' && domainAgeSignal.value?.triggered) {
+    ruleSignals.push(domainAgeSignal.value);
+  }
 
   const redirectSignals = await getRedirectSignalsAsync(tabId);
 
@@ -224,7 +231,10 @@ async function runFullAnalysis(tabId, url, domSignals) {
     domSignals || null,
     threatIntel.status === 'fulfilled' ? threatIntel.value : null,
     redirectSignals,
-    paymentAnalysis
+    paymentAnalysis,
+    null,
+    null,
+    brandsList
   );
 
   verdict.url = url;
@@ -286,9 +296,14 @@ async function analyzeSearchResult(url, tabId) {
   const ruleSignals = await analyzeUrl(url);
   if (!ruleSignals) return { state: 'safe', score: 0, reasons: [] };
 
-  // For search results, we do not visit the page or run DOM/ML models.
-  // We only run URL rules and check reputation.
-  const threatIntelResponse = await checkReputation(url);
+  // For search results, we run URL rules, reputation, and domain age checks.
+  const [threatIntelResponse, domainAgeSignal] = await Promise.all([
+    checkReputation(url),
+    checkDomainAge(url)
+  ]);
+  if (domainAgeSignal?.triggered) {
+    ruleSignals.push(domainAgeSignal);
+  }
   
   // Create a minimal payment analysis result since we don't have DOM signals
   // We can't verify claiming provider, but we can verify domain rules
@@ -1332,6 +1347,8 @@ chrome.runtime.onInstalled.addListener(async () => {
   await loadUrlShorteners();
   await initializeModel();
   await hydrateFromStorage();
+  await hydrateThreatStorage();
+  syncThreatFeeds().catch(() => {});
   console.log('[Verity] Extension installed and ready.');
 });
 
@@ -1341,7 +1358,9 @@ chrome.runtime.onStartup.addListener(async () => {
   await loadUrlShorteners();
   await initializeModel();
   await hydrateFromStorage();
+  await hydrateThreatStorage();
   await initDnrBlocker();
+  syncThreatFeeds().catch(() => {});
   console.log('[Verity] Extension started.');
 });
 
@@ -1351,6 +1370,7 @@ loadPaymentBrands().catch(() => {});
 loadUrlShorteners().catch(() => {});
 hydrateFromStorage().catch(() => {});
 hydrateApprovedDownloads().catch(() => {});
+hydrateThreatStorage().catch(() => {});
 
 // ---------------------------------------------------------------------------
 // Download Monitor Initialization

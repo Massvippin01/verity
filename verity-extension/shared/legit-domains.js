@@ -1,5 +1,6 @@
 import { getDomain, parse } from './psl.js';
 import legitData from '../config/legit_domains.js';
+import { TOP_GLOBAL_DOMAINS } from '../config/top_domains.js';
 
 export const LEGIT_DOMAINS = legitData;
 const domainSet = new Set(legitData.map(d => d.domain.toLowerCase()));
@@ -96,7 +97,8 @@ export function isAllowlistedDomain(hostnameOrUrl) {
     return domainSet.has(hostname);
   }
 
-  // 3. First-party ICANN domain matching
+  // 3. First-party ICANN domain matching against curated banking & top global domains
   const regDomain = getDomain(hostname) || hostname;
-  return domainSet.has(hostname) || domainSet.has(regDomain);
+  return domainSet.has(hostname) || domainSet.has(regDomain) ||
+         TOP_GLOBAL_DOMAINS.has(hostname) || TOP_GLOBAL_DOMAINS.has(regDomain);
 }

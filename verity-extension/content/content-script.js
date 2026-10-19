@@ -368,7 +368,18 @@ function detectPhishingKitWebhookExfil(hasSensitiveInputs) {
     'webhook.site',
     'pipedream.net',
     'ngrok-free.app',
-    'trycloudflare.com'
+    'trycloudflare.com',
+    'api.web3forms.com',
+    'formkeep.com',
+    'usebasin.com',
+    'formbold.com',
+    'herotofu.com',
+    'formsubmit.co',
+    'submit-form.com',
+    'emailjs.com/api',
+    'staticforms.xyz',
+    'formspark.io',
+    'formcarry.com'
   ];
 
   const scripts = (typeof document !== 'undefined' && document.scripts) ? document.scripts : [];
@@ -409,6 +420,86 @@ function detectHighPressureTimer(hasPaymentOrOtp) {
 
   const timerElements = querySelectorAllDeep('[id*="timer"], [class*="timer"], [id*="countdown"], [class*="countdown"], [id*="otp-timer"], [class*="otp-timer"], [id*="expires"], [class*="expires"]');
   return timerElements.length > 0;
+}
+
+function detectFreeHostingCredentialTrap(currentHostname, hasSensitiveInputs) {
+  if (!hasSensitiveInputs || !currentHostname) {
+    return { detected: false, platform: null, reason: null };
+  }
+  const cleanHost = currentHostname.toLowerCase().replace(/^www\./, '');
+  const FREE_HOSTING_REGEX = /\.(web\.app|firebaseapp\.com|pages\.dev|workers\.dev|github\.io|vercel\.app|netlify\.app|glitch\.me|replit\.app|render\.com|surge\.sh)$/i;
+  const match = cleanHost.match(FREE_HOSTING_REGEX);
+  if (match) {
+    const platform = match[1];
+    return {
+      detected: true,
+      platform,
+      reason: `Credential collection or sensitive input detected on multi-tenant free hosting (${platform})`
+    };
+  }
+  return { detected: false, platform: null, reason: null };
+}
+
+function detectPhishingEvasionTechniques(hasSensitiveInputs) {
+  if (!hasSensitiveInputs) {
+    return { detected: false, reason: null, technique: null };
+  }
+
+  if (typeof document !== 'undefined') {
+    const body = document.body;
+    if (body) {
+      const oncontextmenu = (body.getAttribute('oncontextmenu') || '').toLowerCase();
+      const onselectstart = (body.getAttribute('onselectstart') || '').toLowerCase();
+      if (oncontextmenu.includes('return false') || oncontextmenu.includes('preventdefault')) {
+        return {
+          detected: true,
+          technique: 'right-click suppression',
+          reason: 'Right-click contextmenu disabled on sensitive credential entry page'
+        };
+      }
+      if (onselectstart.includes('return false')) {
+        return {
+          detected: true,
+          technique: 'selection suppression',
+          reason: 'Text selection disabled on sensitive credential entry page'
+        };
+      }
+    }
+
+    const scripts = document.scripts || [];
+    for (let i = 0; i < scripts.length; i++) {
+      const code = (scripts[i].innerText || scripts[i].textContent || '').toLowerCase();
+      if (!code) continue;
+      const hasDevToolsBlock = (
+        (code.includes('123') || code.includes('key === "f12"') || code.includes("key === 'f12'")) &&
+        (code.includes('preventdefault') || code.includes('return false'))
+      ) || (
+        (code.includes('ctrlkey') || code.includes('metakey')) &&
+        (code.includes('shiftkey')) &&
+        (code.includes('73') || code.includes('74') || code.includes('85') || code.includes("'i'") || code.includes('"i"')) &&
+        (code.includes('preventdefault') || code.includes('return false'))
+      );
+
+      const hasDebuggerLoop = code.includes('debugger') && (code.includes('setinterval') || code.includes('settimeout'));
+
+      if (hasDevToolsBlock) {
+        return {
+          detected: true,
+          technique: 'devtools blocking',
+          reason: 'Keyboard interception blocking developer inspection (F12/Ctrl+Shift+I) on credential page'
+        };
+      }
+      if (hasDebuggerLoop) {
+        return {
+          detected: true,
+          technique: 'anti-debugging loop',
+          reason: 'Anti-debugging execution loop detected on credential page'
+        };
+      }
+    }
+  }
+
+  return { detected: false, reason: null, technique: null };
 }
 
 function detectBitbFakeWindowAttack() {
@@ -622,6 +713,13 @@ function extractBrandAssetUrls() {
         urls.push(content);
       }
     }
+    const styleLinks = querySelectorAllDeep('link[rel="stylesheet" i]');
+    for (const link of styleLinks) {
+      const href = link.getAttribute('href') || link.href;
+      if (href && !href.startsWith('data:') && !href.startsWith('blob:')) {
+        urls.push(href);
+      }
+    }
     const imgs = querySelectorAllDeep('header img, nav img, form img, img[class*="logo" i], img[id*="logo" i], img[alt*="logo" i]');
     for (const img of imgs.slice(0, 15)) {
       const src = img.getAttribute('src') || img.src;
@@ -815,6 +913,8 @@ function collectSignals() {
   const kycFraud = isTrustedDomain ? { detected: false } : detectKycAndAadhaarPanFraud(text);
   const webhookExfil = isTrustedDomain ? { detected: false } : detectPhishingKitWebhookExfil(hasSensitiveInputs);
   const highPressureTimer = isTrustedDomain ? false : detectHighPressureTimer(hasPaymentOrOtp);
+  const freeHostingTrap = isTrustedDomain ? { detected: false } : detectFreeHostingCredentialTrap(currentHostname, hasSensitiveInputs);
+  const evasionTechnique = isTrustedDomain ? { detected: false } : detectPhishingEvasionTechniques(hasSensitiveInputs);
 
   // Embedded media player and actual payment inputs check
   const isEmbeddedMedia = /(^|\.)(youtube(-nocookie)?\.com|youtu\.be|vimeo\.com|player\.vimeo\.com|dailymotion\.com|twitch\.tv|player\.twitch\.tv)$/i.test(currentHostname);
@@ -880,6 +980,11 @@ function collectSignals() {
     phishingKitWebhookExfil: isTrustedDomain ? false : webhookExfil.detected,
     webhookExfilEndpoint: isTrustedDomain ? null : webhookExfil.endpoint,
     highPressureTimer: isTrustedDomain ? false : highPressureTimer,
+    freeHostingCredentialTrap: isTrustedDomain ? false : freeHostingTrap.detected,
+    freeHostingPlatform: isTrustedDomain ? null : freeHostingTrap.platform,
+    freeHostingReason: isTrustedDomain ? null : freeHostingTrap.reason,
+    evasionTechniqueDetected: isTrustedDomain ? false : evasionTechnique.detected,
+    evasionTechniqueReason: isTrustedDomain ? null : evasionTechnique.reason,
     hasUpiLink,
     pageText:  text.substring(0, 3000),
     pageTitle: (typeof document !== 'undefined' ? document.title : '') || '',
@@ -3447,6 +3552,8 @@ if (typeof globalThis !== 'undefined') {
   globalThis.scanQrCodesOnPage = scanQrCodesOnPage;
   globalThis.inspectQrPayload = inspectQrPayload;
   globalThis.detectQrFromDomAttributes = detectQrFromDomAttributes;
+  globalThis.detectFreeHostingCredentialTrap = detectFreeHostingCredentialTrap;
+  globalThis.detectPhishingEvasionTechniques = detectPhishingEvasionTechniques;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -3466,6 +3573,8 @@ if (typeof module !== 'undefined' && module.exports) {
     scanQrCodesOnPage,
     inspectQrPayload,
     detectQrFromDomAttributes,
+    detectFreeHostingCredentialTrap,
+    detectPhishingEvasionTechniques,
   };
 }
 

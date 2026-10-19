@@ -41,9 +41,13 @@
     RULE_AFFILIATE_TRACKER: (p) => 'Suspicious affiliate or ad-tracker parameter sequence detected.',
     RULE_MALVERTISING_REDIRECT: (p) => 'High-risk malvertising redirect or obfuscated pattern detected.',
     RULE_PIRACY_MEDIA: (p) => 'Unverified streaming or piracy media pattern detected.',
+    SIG_NEWLY_REGISTERED_DOMAIN: (p) => `Newly registered domain (${p?.ageDays !== undefined ? p.ageDays + ' days old' : '< 30 days old'}). High risk of ephemeral phishing campaigns.`,
 
     // ── Brand Detector ────────────────────────────────────────────────────────
     BRAND_TYPOSQUATTING: (p) => `Hostname is a visual typosquat of "${p?.brand || 'Brand'}" (distance: ${p?.distance || 1}).`,
+    RULE_HOMOGRAPH_ATTACK: (p) => (p?.brand && p.brand !== 'Domain' && p.brand !== 'Unverified IDN')
+      ? `Homograph attack: Unicode character spoofing detected impersonating "${p.brand}".`
+      : `Homograph attack: Deceptive lookalike characters or mixed Unicode scripts detected in hostname.`,
 
     // ── Risk Engine Signals ───────────────────────────────────────────────────
     SIG_URL_SUSPICIOUS: (p) => `URL structure exhibits suspicious patterns (${p?.details || 'heuristic signals'}).`,
@@ -69,6 +73,9 @@
     SIG_UPI_DEBIT_TRAP: (p) => 'High risk: UPI cashback or debit trap detected hiding a payment request.',
     SIG_PAYMENT_PHISHING: (p) => 'High risk: Unverified domain requesting payment credentials (Card/CVV/OTP).',
     SIG_CROSS_DOMAIN_CREDENTIAL_EXFIL: (p) => `Critical risk: Form transmits sensitive credentials to an untrusted external domain (${p?.targetDomain || 'unverified'}).`,
+    SIG_FAVICON_BRAND_SPOOF: (p) => `Brand spoofing: Official favicon of "${p?.brand || 'protected brand'}" detected on an unverified domain.`,
+    SIG_FREE_HOSTING_CREDENTIAL_TRAP: (p) => `High risk: Sensitive credential form detected on multi-tenant free hosting (${p?.platform || 'static cloud platform'}).`,
+    SIG_EVASION_TECHNIQUE_DETECTED: (p) => `Phishing kit evasion detected: Page actively suppresses right-click or developer inspection (${p?.technique || 'anti-analysis'}).`,
 
     // ── Payment Protection Signals ────────────────────────────────────────────
     PAYMENT_FAKE_PROVIDER: (p) => `Page claims to be "${p?.claimedProvider || 'Provider'}" but domain "${p?.hostname || ''}" is not its official domain.`,
@@ -248,6 +255,7 @@
     RULE_AFFILIATE_TRACKER: 'url',
     RULE_PIRACY_MEDIA: 'url',
     SIG_URL_SUSPICIOUS: 'url',
+    SIG_NEWLY_REGISTERED_DOMAIN: 'url',
 
     // Category: ip_host (high-confidence network track)
     RULE_IP_BASED_URL: 'ip_host',
@@ -264,8 +272,10 @@
     RULE_BRAND_NAME_WRONG_DOMAIN: 'brand_impersonation',
     RULE_BRAND_VARIANT_MATCH: 'brand_impersonation',
     BRAND_TYPOSQUATTING: 'brand_impersonation',
+    RULE_HOMOGRAPH_ATTACK: 'brand_impersonation',
     SIG_BRAND_IMPERSONATION: 'brand_impersonation',
     SIG_BRAND_ASSET_HOTLINK_SPOOF: 'brand_impersonation',
+    SIG_FAVICON_BRAND_SPOOF: 'brand_impersonation',
     SIG_CONTENT_BRAND_IMPERSONATION: 'brand_impersonation',
     SIG_BITB_FAKE_WINDOW_ATTACK: 'brand_impersonation',
     SIG_AITM_REVERSE_PROXY_PHISH: 'brand_impersonation',
@@ -335,7 +345,9 @@
     USER_OVERRIDE_ACTIVE: 'threat_intel',
     SIG_CROSS_DOMAIN_CREDENTIAL_EXFIL: 'threat_intel',
     SIG_PHISHING_KIT_WEBHOOK_EXFIL: 'threat_intel',
-    SIG_UNTRUSTED_SCREEN_SHARE: 'threat_intel'
+    SIG_UNTRUSTED_SCREEN_SHARE: 'threat_intel',
+    SIG_FREE_HOSTING_CREDENTIAL_TRAP: 'threat_intel',
+    SIG_EVASION_TECHNIQUE_DETECTED: 'threat_intel'
   };
 
   /**
@@ -345,14 +357,14 @@
    * Multi-signal convergence is strictly required to achieve a Block verdict.
    */
   const CATEGORY_CAPS = {
-    url: 40,
+    url: 55,
     ip_host: 60,
     malvertising: 85,
-    brand_impersonation: 55,
-    ml: 35,
-    dom_credentials: 50,
+    brand_impersonation: 65,
+    ml: 45,
+    dom_credentials: 60,
     scam_language: 75,
-    payment_phishing: 65,
+    payment_phishing: 68,
     synergy: 40,
     download: 60,
     threat_intel: 65

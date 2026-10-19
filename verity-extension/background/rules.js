@@ -1,6 +1,8 @@
 import { getDomain, getPublicSuffix, getSubdomain } from '../shared/psl.js';
 import { isAllowlistedDomain } from '../shared/legit-domains.js';
 import { t } from '../shared/messages.js';
+import { detectHomographAttack } from './homograph-detector.js';
+import { TOP_GLOBAL_DOMAINS } from '../config/top_domains.js';
 
 /**
  * Parses a URL string safely. Returns null if invalid.
@@ -270,6 +272,10 @@ export function hasSuspiciousUrlPattern(urlString) {
 export function isTrustedTopDomain(hostname) {
   if (!hostname) return false;
   const h = hostname.toLowerCase();
+  const root = getDomain(h) || h;
+  if (TOP_GLOBAL_DOMAINS.has(h) || TOP_GLOBAL_DOMAINS.has(root)) {
+    return true;
+  }
   const trustedList = [
     'google.com', 'youtube.com', 'youtube-nocookie.com', 'youtu.be', 'vimeo.com', 'player.vimeo.com',
     'dailymotion.com', 'twitch.tv', 'gmail.com', 'microsoft.com', 'login.microsoftonline.com',
@@ -703,6 +709,16 @@ export function hasPunycodeOrKeywords(urlString) {
     };
   }
 
+  // Helper to match keywords with token boundaries (prevents false positives like 'pan' in 'company')
+  const hasKeywordToken = (str, term) => {
+    if (term.length <= 3) {
+      const regex = new RegExp('(^|[-._/?&=0-9])' + term + '([-._/?&=0-9]|$)', 'i');
+      return regex.test(str);
+    }
+    const regex = new RegExp('(^|[-._/?&=0-9])' + term + '([-._/?&=0-9]|$)', 'i');
+    return regex.test(str) || (term.length >= 6 && str.includes(term));
+  };
+
   const suspiciousKeywords = [
     'login', 'signin', 'sign-in', 'logon',
     'verify', 'verification', 'validate', 'confirm',
@@ -713,15 +729,50 @@ export function hasPunycodeOrKeywords(urlString) {
     'claim', 'reward', 'prize', 'offer', 'free', 'winner',
     'helpdesk', 'support', 'customer-care'
   ];
-  const fullUrl = url.pathname.toLowerCase() + url.search.toLowerCase() + url.hostname.toLowerCase();
-  
-  const foundKeywords = suspiciousKeywords.filter(k => fullUrl.includes(k));
-  if (foundKeywords.length >= 2) {
+
+  const highRiskLurePairs = [
+    ['claim', 'free'], ['claim', 'reward'], ['claim', 'prize'], ['claim', 'winner'], ['offer', 'free'],
+    ['kyc', 'otp'], ['kyc', 'pan'], ['kyc', 'aadhar'], ['kyc', 'update'], ['netbanking', 'otp'],
+    ['digital', 'arrest'], ['police', 'cbi'], ['bill', 'disconnected']
+  ];
+
+  const host = url.hostname.toLowerCase();
+  const path = (url.pathname + url.search).toLowerCase();
+
+  const hostKw = suspiciousKeywords.filter(k => hasKeywordToken(host, k));
+  const pathKw = suspiciousKeywords.filter(k => hasKeywordToken(path, k));
+
+  // 1. Multiple suspicious keywords in hostname/subdomain (e.g. login.secure-update.com)
+  if (hostKw.length >= 2) {
     return {
       id: 'RULE_PUNYCODE_OR_KEYWORDS',
-      params: { keywords: foundKeywords.slice(0, 4).join(', ') },
+      params: { keywords: hostKw.slice(0, 4).join(', ') },
       score: 40,
-      reason: t('RULE_PUNYCODE_OR_KEYWORDS', { keywords: foundKeywords.slice(0, 4).join(', ') }),
+      reason: t('RULE_PUNYCODE_OR_KEYWORDS', { keywords: hostKw.slice(0, 4).join(', ') }),
+      triggered: true
+    };
+  }
+
+  // 2. Corroborated keyword in hostname paired with keyword in path (e.g. free-game-skins.xyz/claim)
+  if (hostKw.length >= 1 && pathKw.length >= 1) {
+    const combined = [...hostKw, ...pathKw];
+    return {
+      id: 'RULE_PUNYCODE_OR_KEYWORDS',
+      params: { keywords: combined.slice(0, 4).join(', ') },
+      score: 40,
+      reason: t('RULE_PUNYCODE_OR_KEYWORDS', { keywords: combined.slice(0, 4).join(', ') }),
+      triggered: true
+    };
+  }
+
+  // 3. High-risk explicit cyber-fraud / lure keyword pair in path (e.g. /kyc/update-otp or /claim/free-gift)
+  const matchedLurePair = highRiskLurePairs.find(([a, b]) => pathKw.includes(a) && pathKw.includes(b));
+  if (matchedLurePair) {
+    return {
+      id: 'RULE_PUNYCODE_OR_KEYWORDS',
+      params: { keywords: matchedLurePair.join(' + ') },
+      score: 40,
+      reason: t('RULE_PUNYCODE_OR_KEYWORDS', { keywords: matchedLurePair.join(' + ') }),
       triggered: true
     };
   }
@@ -900,4 +951,13 @@ export function hasAitmProxyUrlSignature(urlString) {
   }
 
   return { id: null, params: {}, score: 0, reason: null, triggered: false };
+}
+
+/**
+  * Rule: Unicode Homograph & Confusable Attack Detection
+  * @param {string} urlString
+  * @param {Array} brandsList
+  */
+export function hasHomographAttack(urlString, brandsList) {
+  return detectHomographAttack(urlString, brandsList);
 }
