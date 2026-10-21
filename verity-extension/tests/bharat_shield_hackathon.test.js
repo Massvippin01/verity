@@ -407,3 +407,46 @@ test('X-Ray Educator: generateXRayTeachingCards generates 3 interactive cards & 
 
   assert.ok(summaryText.includes('[Spot The Scam X-Ray]'));
 });
+
+// ════════════════════════════════════════════════════════════════════════════════
+// 6. Citizen-Friendly Bharat Shield Blocked UI (under 15KB)
+// ════════════════════════════════════════════════════════════════════════════════
+
+test('Bharat Shield UI: detectThreatCategory classifies plain-language citizen threats', async () => {
+  const { detectThreatCategory, STRINGS, LEGIT } = await import('../ui/blocked.js');
+
+  assert.equal(detectThreatCategory('cbi-police-notice.xyz', 'arrest'), 'SIG_DIGITAL_ARREST_EXTORTION');
+  assert.equal(detectThreatCategory('echallan-download.in', 'apk'), 'SIG_MALICIOUS_APK_DROPPER');
+  assert.equal(detectThreatCategory('sbi-kyc-verify.top', 'pin'), 'SIG_ILLEGAL_WEB_PIN_COLLECTION');
+  assert.equal(detectThreatCategory('olx-reward-cashback.xyz', 'qr'), 'SIG_UPI_QR_COLLECT_TRAP');
+  assert.equal(detectThreatCategory('fake-update.com', 'clipboard'), 'SIG_CLICKFIX_CLIPBOARD_ATTACK');
+  assert.equal(detectThreatCategory('unknown-phish.com', 'webhook'), 'SIG_PHISHING_KIT_WEBHOOK_EXFIL');
+
+  // Multi-lingual strings validation
+  for (const lang of ['en-IN', 'hi-IN', 'ta-IN', 'te-IN']) {
+    assert.ok(STRINGS[lang], `Missing strings for lang ${lang}`);
+    assert.equal(STRINGS[lang].length, 7);
+  }
+
+  // Known Indian Legit Pairs
+  assert.ok(LEGIT.sbi);
+  assert.equal(LEGIT.sbi[1], 'onlinesbi.sbi');
+  assert.ok(LEGIT.incometax);
+  assert.equal(LEGIT.incometax[1], 'incometax.gov.in');
+});
+
+test('Bharat Shield UI: Ultra-Lightweight Bundle Size is strictly under 15KB total', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const htmlSize = fs.statSync(path.resolve('ui/blocked.html')).size;
+  const cssSize = fs.statSync(path.resolve('ui/blocked.css')).size;
+  const jsSize = fs.statSync(path.resolve('ui/blocked.js')).size;
+  const totalBytes = htmlSize + cssSize + jsSize;
+
+  assert.ok(
+    totalBytes < 15360,
+    `Total UI bundle size must be under 15KB (15360 bytes), got ${totalBytes} bytes (${(totalBytes / 1024).toFixed(2)} KB)`
+  );
+});
+
