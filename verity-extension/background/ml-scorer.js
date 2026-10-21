@@ -47,6 +47,25 @@ async function setupOffscreenDocument() {
   }
 }
 
+let offscreenIdleTimer = null;
+const OFFSCREEN_IDLE_TIMEOUT_MS = 60 * 1000; // 60 seconds of idle before hibernating
+
+function resetOffscreenIdleTimer() {
+  if (offscreenIdleTimer) clearTimeout(offscreenIdleTimer);
+  offscreenIdleTimer = setTimeout(async () => {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.offscreen && chrome.offscreen.closeDocument) {
+        const contexts = await chrome.runtime.getContexts({
+          contextTypes: ['OFFSCREEN_DOCUMENT']
+        });
+        if (contexts && contexts.length > 0) {
+          await chrome.offscreen.closeDocument();
+        }
+      }
+    } catch (_) {}
+  }, OFFSCREEN_IDLE_TIMEOUT_MS);
+}
+
 /**
  * Proxies the ML inference request to the offscreen document.
  * @param {string} url 
@@ -56,6 +75,7 @@ async function setupOffscreenDocument() {
 export async function getMlScore(url, domSignals) {
   try {
     await setupOffscreenDocument();
+    resetOffscreenIdleTimer();
     const response = await chrome.runtime.sendMessage({
       target: 'offscreen',
       action: 'run_inference',

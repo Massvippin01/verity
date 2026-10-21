@@ -22,6 +22,17 @@
     return;
   }
 
+  // ── Step 0: Trap Element.prototype.attachShadow to break closed ShadowDOM cloaking ──
+  if (typeof Element !== 'undefined' && Element.prototype && Element.prototype.attachShadow) {
+    const origAttachShadow = Element.prototype.attachShadow;
+    Element.prototype.attachShadow = function (init) {
+      if (init && init.mode === 'closed') {
+        init = Object.assign({}, init, { mode: 'open' }); // Force all shadow trees open for traversal
+      }
+      return origAttachShadow.call(this, init);
+    };
+  }
+
   // Prevent multiple injections
   if (window.__VERITY_MAIN_INTERCEPTOR_ACTIVE__) return;
   Object.defineProperty(window, '__VERITY_MAIN_INTERCEPTOR_ACTIVE__', {
@@ -30,13 +41,68 @@
     configurable: false
   });
 
-  // Strict phishing webhook exfiltration endpoints
-  const EXFIL_ENDPOINTS = Object.freeze([
-    'api.telegram.org/bot',
-    'discord.com/api/webhooks',
-    'discordapp.com/api/webhooks',
-    'webhook.site'
-  ]);
+  // Strict phishing webhook exfiltration endpoints regex
+  const EXFIL_REGEX = /api\.telegram\.org\/bot|discord(app)?\.com\/api\/webhooks|webhook\.site|pipedream\.net|hookbin\.com|requestcatcher\.com/i;
+
+  function isExfilEndpoint(url) {
+    if (!url || typeof url !== 'string') return false;
+    return EXFIL_REGEX.test(url);
+  }
+
+  // ── Step 0.1: Context Hardening (Freeze fetch and protect against iframe recovery) ──
+  function hardenContext(ctx) {
+    if (!ctx || ctx.__VERITY_CTX_HARDENED__) return;
+    try {
+      ctx.__VERITY_CTX_HARDENED__ = true;
+      if (typeof ctx.fetch === 'function') {
+        const origFetch = ctx.fetch;
+        const wrappedFetch = function (resource, _init) {
+          let targetUrl = '';
+          if (typeof resource === 'string') {
+            targetUrl = resource;
+          } else if (resource && typeof resource.url === 'string') {
+            targetUrl = resource.url;
+          }
+          if (isExfilEndpoint(targetUrl)) {
+            notifyThreat('SIG_PHISHING_KIT_WEBHOOK_EXFIL', { endpoint: targetUrl });
+            return Promise.reject(new TypeError('Blocked by Verity Security Shield: Phishing exfiltration endpoint'));
+          }
+          return origFetch.apply(this, arguments);
+        };
+
+        try {
+          Object.defineProperty(ctx, 'fetch', {
+            value: wrappedFetch,
+            configurable: false,
+            writable: false
+          });
+        } catch (_) {
+          ctx.fetch = wrappedFetch;
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Trap dynamically added iframes to prevent pristine prototype extraction
+  if (typeof Node !== 'undefined' && Node.prototype) {
+    const origAppendChild = Node.prototype.appendChild;
+    Node.prototype.appendChild = function (child) {
+      const res = origAppendChild.apply(this, arguments);
+      if (child && child.tagName === 'IFRAME' && child.contentWindow) {
+        try { hardenContext(child.contentWindow); } catch (_) {}
+      }
+      return res;
+    };
+
+    const origInsertBefore = Node.prototype.insertBefore;
+    Node.prototype.insertBefore = function (newNode, referenceNode) {
+      const res = origInsertBefore.apply(this, arguments);
+      if (newNode && newNode.tagName === 'IFRAME' && newNode.contentWindow) {
+        try { hardenContext(newNode.contentWindow); } catch (_) {}
+      }
+      return res;
+    };
+  }
 
   const CLICKFIX_EXEC_PAYLOADS = Object.freeze([
     'powershell', 'mshta', 'cmd.exe', 'iex(', 'invoke-webrequest',
@@ -151,26 +217,8 @@
     }
   }, true);
 
-  // ── 2. Intercept window.fetch ──────────────────────────────────────────────
-  if (typeof window.fetch === 'function') {
-    const originalFetch = window.fetch;
-    window.fetch = function (resource, _init) {
-      let targetUrl = '';
-      if (typeof resource === 'string') {
-        targetUrl = resource;
-      } else if (resource && typeof resource.url === 'string') {
-        targetUrl = resource.url;
-      }
-
-      const matchedExfil = isExfilEndpoint(targetUrl);
-      if (matchedExfil) {
-        notifyThreat('SIG_PHISHING_KIT_WEBHOOK_EXFIL', { endpoint: targetUrl });
-        return Promise.reject(new TypeError('Blocked by Verity Security Shield: Phishing exfiltration endpoint'));
-      }
-
-      return originalFetch.apply(this, arguments);
-    };
-  }
+  // ── 2. Intercept and Harden window.fetch ───────────────────────────────────
+  hardenContext(window);
 
   // ── 3. Intercept XMLHttpRequest ────────────────────────────────────────────
   if (typeof window.XMLHttpRequest === 'function' && window.XMLHttpRequest.prototype) {
@@ -278,6 +326,105 @@
       return origSwRegister.apply(this, arguments);
     };
   }
+
+  // ── 7b. Web3 & Crypto Wallet Drainer Interceptor (Ethereum & Solana) ───────
+  function hookWeb3Provider() {
+    if (typeof window === 'undefined') return;
+
+    // Selector hashes for ERC-20 / ERC-721 token and NFT approvals:
+    // 0x095ea7b3 = approve(address,uint256)
+    // 0xa22cb465 = setApprovalForAll(address,bool)
+    // 0xd505accf = permit(...)
+    const APPROVAL_SELECTORS = /^0x(095ea7b3|a22cb465|d505accf)/i;
+
+    function wrapEthProvider(provider) {
+      if (!provider || provider.__verityWrapped) return provider;
+      const origRequest = provider.request;
+      if (typeof origRequest === 'function') {
+        provider.request = new Proxy(origRequest, {
+          apply(target, thisArg, args) {
+            const payload = args[0] || {};
+            const method = String(payload.method || '');
+            const params = payload.params || [];
+
+            if (method === 'eth_sign') {
+              notifyThreat('SIG_WEB3_DRAINER_RAW_SIGN', {
+                type: 'WEB3_DRAINER_RAW_SIGN',
+                method,
+                reason: 'Malicious Web3 drainer raw hash signing (eth_sign) intercepted.'
+              });
+            } else if (method === 'eth_sendTransaction' && params[0]?.data) {
+              if (APPROVAL_SELECTORS.test(params[0].data)) {
+                notifyThreat('SIG_WEB3_UNLIMITED_APPROVAL', {
+                  type: 'WEB3_UNLIMITED_APPROVAL',
+                  method,
+                  data: params[0].data.slice(0, 10),
+                  reason: 'Malicious Web3 wallet unlimited asset approval or permit intercepted.'
+                });
+              }
+            }
+            return Reflect.apply(target, thisArg, args);
+          }
+        });
+      }
+      try {
+        Object.defineProperty(provider, '__verityWrapped', { value: true, enumerable: false, configurable: true });
+      } catch (_) {
+        provider.__verityWrapped = true;
+      }
+      return provider;
+    }
+
+    function wrapSolanaProvider(provider) {
+      if (!provider || provider.__veritySolanaWrapped) return provider;
+      const methodsToWrap = ['signTransaction', 'signAllTransactions', 'signMessage'];
+      for (const m of methodsToWrap) {
+        if (typeof provider[m] === 'function') {
+          const origFn = provider[m];
+          provider[m] = function () {
+            if (isSuspiciousHostContext()) {
+              notifyThreat('SIG_WEB3_DRAINER_RAW_SIGN', {
+                type: 'WEB3_DRAINER_RAW_SIGN',
+                method: m,
+                reason: `Malicious Solana drainer signature (${m}) intercepted on suspicious domain.`
+              });
+            }
+            return origFn.apply(this, arguments);
+          };
+        }
+      }
+      try {
+        Object.defineProperty(provider, '__veritySolanaWrapped', { value: true, enumerable: false, configurable: true });
+      } catch (_) {
+        provider.__veritySolanaWrapped = true;
+      }
+      return provider;
+    }
+
+    if (window.ethereum) wrapEthProvider(window.ethereum);
+    let currentEth = window.ethereum;
+    try {
+      Object.defineProperty(window, 'ethereum', {
+        configurable: true,
+        enumerable: true,
+        get() { return currentEth; },
+        set(val) { currentEth = wrapEthProvider(val); }
+      });
+    } catch (_) {}
+
+    if (window.solana) wrapSolanaProvider(window.solana);
+    let currentSol = window.solana;
+    try {
+      Object.defineProperty(window, 'solana', {
+        configurable: true,
+        enumerable: true,
+        get() { return currentSol; },
+        set(val) { currentSol = wrapSolanaProvider(val); }
+      });
+    } catch (_) {}
+  }
+
+  hookWeb3Provider();
 
   // ── 8. Anti-Popup & Pop-Under Defusal: Intercept window.open ──────────────
   if (typeof window !== 'undefined' && typeof window.open === 'function') {

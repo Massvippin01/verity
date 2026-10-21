@@ -1015,7 +1015,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ verdict: null });
         return;
       }
-      const redirectSignals = await getRedirectSignalsAsync(tabId);
+      const [redirectSignals, threatIntel] = await Promise.all([
+        getRedirectSignalsAsync(tabId),
+        checkReputation(url)
+      ]);
       const tabState = await getTabRiskState(tabId);
       if (tabState && tabState.isPopunderTab && redirectSignals) {
         redirectSignals.popunderSpawn = true;
@@ -1025,7 +1028,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         ruleSignals,
         null,
         null,
-        null,
+        threatIntel,
         redirectSignals
       );
       verdict.url = url;
@@ -1119,7 +1122,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep channel open
   }
 
-  if (message.action === 'RUNTIME_THREAT_DETECTED') {
+  if (message.action === 'RUNTIME_THREAT_DETECTED' || message.type === 'RUNTIME_THREAT_DETECTED') {
     const targetTabId = tabId || (sender.tab ? sender.tab.id : null);
     const targetUrl = message.url || (sender.tab ? sender.tab.url : '');
     // If the domain is an allowlisted / trusted domain (e.g. Google), never trigger runtime threat
@@ -1128,7 +1131,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false;
     }
     const threatSignal = message.signal || 'SIG_PHISHING_KIT_WEBHOOK_EXFIL';
-    const threatScore = 95;
+    const threatScore = message.score || 95;
     const threatVerdict = {
       action: 'block',
       severity: 'danger',
@@ -1145,6 +1148,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           ? 'Rogue push notification or service worker registration blocked.'
           : threatSignal === 'SIG_UNTRUSTED_SCREEN_SHARE'
           ? 'Untrusted screen sharing capture attempt blocked.'
+          : threatSignal === 'SIG_WEB3_DRAINER_RAW_SIGN'
+          ? 'Live Web3 wallet drainer raw hash signing (eth_sign) blocked.'
+          : threatSignal === 'SIG_WEB3_UNLIMITED_APPROVAL'
+          ? 'Live Web3 wallet unlimited asset approval or permit blocked.'
+          : threatSignal === 'SIG_CROSS_ORIGIN_CREDENTIAL_POST'
+          ? 'Cross-origin form post credential hijacking blocked.'
+          : threatSignal === 'SIG_BITB_FAKE_POPUP_SPOOF'
+          ? 'Browser-in-the-Browser fake address bar spoofing blocked.'
           : 'Phishing kit credential exfiltration endpoint blocked.'
       ],
       signals: [{ id: threatSignal, score: threatScore }]

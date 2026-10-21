@@ -209,13 +209,13 @@ def main():
         "HOST-ONLY features (10 features)"
     )
 
-    # Train final candidate model on all Dev data
+    # Train final candidate model on all Dev data (18-feature baseline)
     chosen_features = ALL_FEATURE_NAMES
     X_train = X_all_dev
     gb_model = GradientBoostingClassifier(n_estimators=50, max_depth=3, learning_rate=0.1, random_state=42)
     gb_model.fit(X_train, y_dev)
 
-    # Export ONNX model
+    # Export ONNX model v2
     onnx_path = os.path.join(os.path.dirname(__file__), '..', 'background', 'model', 'phishing_model_v2.onnx')
     initial_type = [('float_input', FloatTensorType([None, len(chosen_features)]))]
     options = {type(gb_model): {'zipmap': False}}
@@ -226,6 +226,19 @@ def main():
     with open(onnx_path, 'wb') as f:
         f.write(onnx_model.SerializeToString())
     print(f"\n[ONNX] Saved candidate model v2 to {onnx_path} ({os.path.getsize(onnx_path)} bytes)")
+
+    # ── Train 26-Feature Next-Gen Pipeline with Dynamic Int8 Quantization ──────
+    print("\n--- Training Next-Gen 26-Feature Model (v3) ---")
+    X_26_dev = np.array([extract_26_features(d['url']) for d in dev_data], dtype=np.float32)
+    gb_v3 = GradientBoostingClassifier(n_estimators=60, max_depth=4, learning_rate=0.08, random_state=42)
+    gb_v3.fit(X_26_dev, y_dev)
+
+    v3_fp32 = os.path.join(os.path.dirname(__file__), '..', 'background', 'model', 'phishing_model_v3_fp32.onnx')
+    v3_int8 = os.path.join(os.path.dirname(__file__), '..', 'background', 'model', 'phishing_model_v3.onnx')
+    try:
+        export_quantized_onnx(gb_v3, output_fp32=v3_fp32, output_int8=v3_int8)
+    except Exception as e:
+        print(f"[Warning] Could not export quantized ONNX: {e}")
 
     # Save schema
     schema_path = os.path.join(os.path.dirname(__file__), '..', 'background', 'model', 'rich_features.json')
@@ -257,6 +270,119 @@ def main():
     with open(fixture_path, 'w', encoding='utf-8') as f:
         json.dump(fixtures, f, indent=2)
     print(f"[Fixtures] Saved {len(fixtures)} parity test fixtures to {fixture_path}")
+
+TOP_BRANDS = [
+    "google", "microsoft", "apple", "paypal", "amazon", "netflix", "facebook",
+    "instagram", "whatsapp", "linkedin", "chase", "wellsfargo", "citibank",
+    "hdfcbank", "icicibank", "sbi", "axisbank", "kotak", "paytm", "phonepe",
+    "binance", "coinbase", "metamask", "steam", "roblox", "adobe", "dropbox"
+]
+
+def levenshtein_distance(s1: str, s2: str) -> int:
+    if len(s1) < len(s2):
+        return levenshtein_distance(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+    prev_row = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        curr_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = prev_row[j + 1] + 1
+            deletions = curr_row[j] + 1
+            substitutions = prev_row[j] + (c1 != c2)
+            curr_row.append(min(insertions, deletions, substitutions))
+        prev_row = curr_row
+    return prev_row[-1]
+
+def shannon_entropy(s: str) -> float:
+    if not s:
+        return 0.0
+    freq = {}
+    for ch in s:
+        freq[ch] = freq.get(ch, 0) + 1
+    length = len(s)
+    return -sum((c / length) * math.log2(c / length) for c in freq.values())
+
+def extract_26_features(url_str: str) -> list:
+    parsed = urlparse(url_str if "://" in url_str else f"http://{url_str}")
+    host = (parsed.hostname or "").lower()
+    path = parsed.path or ""
+    full = url_str.lower()
+
+    url_len = float(len(full))
+    host_len = float(len(host))
+    path_len = float(len(path))
+    digits = sum(c.isdigit() for c in full)
+    host_digits = sum(c.isdigit() for c in host)
+
+    digit_ratio = digits / max(url_len, 1.0)
+    host_digit_ratio = host_digits / max(host_len, 1.0)
+    host_entropy = shannon_entropy(host)
+
+    dot_count = float(full.count("."))
+    hyphen_count = float(full.count("-"))
+    at_count = float(full.count("@"))
+    slash_count = float(full.count("/"))
+    query_count = float(full.count("?"))
+    equal_count = float(full.count("="))
+
+    tokens = [t for t in re.split(r"[.-]", host) if t]
+    host_tokens = float(len(tokens))
+
+    is_ip = 1.0 if re.match(r"^(?:\d{1,3}\.){3}\d{1,3}$", host) else 0.0
+    is_https = 1.0 if parsed.scheme == "https" else 0.0
+    double_slash = 1.0 if "//" in full[8:] else 0.0
+    is_susp_tld = 1.0 if any(host.endswith(tld) for tld in SUSPICIOUS_TLDS) else 0.0
+    kw_matches = float(sum(1 for kw in KEYWORDS if kw in full))
+
+    # --- Features 19 to 26 ---
+    vowels = len(re.findall(r"[aeiou]", host))
+    consonants = len(re.findall(r"[bcdfghjklmnpqrstvwxyz]", host))
+    vowel_consonant_ratio = float(vowels) / float(consonants + 1)
+
+    min_dist = 20
+    for token in tokens:
+        if len(token) >= 4:
+            for brand in TOP_BRANDS:
+                d = levenshtein_distance(token, brand)
+                if d < min_dist:
+                    min_dist = d
+    brand_min_distance = float(min_dist)
+
+    has_idn_mixed = 1.0 if ("xn--" in host or (re.search(r"[\u0400-\u04FF]", host) and re.search(r"[a-z]", host))) else 0.0
+    parts = host.split(".")
+    num_subdomain_levels = float(max(0, len(parts) - 2))
+    sensitive_dir_depth = float(len(re.findall(r"/(wp-content|wp-includes|plugins|assets|admin|login)", path)))
+    longest_token_len = float(max((len(t) for t in tokens), default=0))
+    special_chars = len(re.findall(r"[_~%=&]", full))
+    special_char_density = float(special_chars) / max(url_len, 1.0)
+    is_port = 1.0 if (parsed.port and parsed.port not in (80, 443)) else 0.0
+
+    return [
+        url_len, host_len, path_len, digit_ratio, host_digit_ratio,
+        host_entropy, dot_count, hyphen_count, at_count, slash_count,
+        query_count, equal_count, host_tokens, is_ip, is_https,
+        double_slash, is_susp_tld, kw_matches,
+        vowel_consonant_ratio, brand_min_distance, has_idn_mixed,
+        num_subdomain_levels, sensitive_dir_depth, longest_token_len,
+        special_char_density, is_port
+    ]
+
+def export_quantized_onnx(clf, output_fp32="phishing_model_v3_fp32.onnx", output_int8="phishing_model_v3.onnx"):
+    from onnxruntime.quantization import quantize_dynamic, QuantType
+    initial_type = [("float_input", FloatTensorType([None, 26]))]
+    options = {type(clf): {'zipmap': False}}
+    onx = convert_sklearn(clf, initial_types=initial_type, target_opset=15, options=options)
+    with open(output_fp32, "wb") as f:
+        f.write(onx.SerializeToString())
+
+    # Apply Dynamic Int8 Quantization for ultra-low WASM memory usage
+    quantize_dynamic(
+        model_input=output_fp32,
+        model_output=output_int8,
+        weight_type=QuantType.QInt8
+    )
+    print(f"[+] Quantized 26-feature ONNX model written to {output_int8}")
 
 if __name__ == '__main__':
     main()

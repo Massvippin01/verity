@@ -2,6 +2,7 @@ import { isTrustedTopDomain } from './rules.js';
 import { isAllowlistedDomain } from '../shared/legit-domains.js';
 import { SIGNAL_CATEGORY_MAP, CATEGORY_CAPS, t } from '../shared/messages.js';
 import { detectFaviconSpoof } from './favicon-matcher.js';
+import { isLegitimateFederatedLogin } from './enterprise-whitelist.js';
 
 /**
  * Scaling factor for on-device ML score (0.0 = disabled, 1.0 = standard 0-25 pts).
@@ -35,7 +36,9 @@ export function calculateRisk(
   mlWeightOverride = null,
   brandsList = []
 ) {
-  const activeMlWeight = (mlWeightOverride !== null) ? mlWeightOverride : ML_WEIGHT;
+  const rawMlWeight = (mlWeightOverride !== null) ? mlWeightOverride : ML_WEIGHT;
+  const isFederatedLogin = isLegitimateFederatedLogin(url);
+  const activeMlWeight = isFederatedLogin ? Math.min(rawMlWeight, 0.15) : rawMlWeight;
   let hostname = '';
   try { hostname = new URL(url).hostname.toLowerCase(); } catch (e) {}
 
@@ -190,6 +193,26 @@ export function calculateRisk(
       categories.phishing.flagged = true;
       categories.phishing.reason = domSignals.bitbReason || 'Browser-in-the-Browser fake authentication window detected';
     }
+    if (domSignals.bitbPopupSpoof && !isAllowlisted) {
+      emitSignal('SIG_BITB_FAKE_POPUP_SPOOF', { spoofedOrigin: domSignals.bitbTarget || 'identity provider' }, 85, 'dom');
+      categories.phishing.flagged = true;
+      categories.phishing.reason = domSignals.bitbReason || 'Browser-in-the-Browser fake popup spoof detected';
+    }
+    if (domSignals.web3DrainerRawSign) {
+      emitSignal('SIG_WEB3_DRAINER_RAW_SIGN', { method: domSignals.web3Method || 'eth_sign' }, 95, 'dom');
+      categories.scamFraud.flagged = true;
+      categories.scamFraud.reason = 'Malicious Web3 wallet drainer raw hash signing intercepted';
+    }
+    if (domSignals.web3UnlimitedApproval) {
+      emitSignal('SIG_WEB3_UNLIMITED_APPROVAL', { data: domSignals.web3Data || 'approval' }, 95, 'dom');
+      categories.scamFraud.flagged = true;
+      categories.scamFraud.reason = 'Malicious Web3 wallet unlimited asset approval intercepted';
+    }
+    if (domSignals.crossOriginCredentialPost) {
+      emitSignal('SIG_CROSS_ORIGIN_CREDENTIAL_POST', { targetUrl: domSignals.crossOriginTarget || 'untrusted endpoint' }, 95, 'dom');
+      categories.phishing.flagged = true;
+      categories.phishing.reason = 'Cross-origin credential post hijacking intercepted';
+    }
     if (domSignals.aitmReverseProxy && !isAllowlisted) {
       emitSignal('SIG_AITM_REVERSE_PROXY_PHISH', { endpoint: domSignals.aitmReason || 'Proprietary IdP inputs' }, 95, 'dom');
       categories.phishing.flagged = true;
@@ -219,6 +242,11 @@ export function calculateRisk(
       emitSignal('SIG_EVASION_TECHNIQUE_DETECTED', { technique: domSignals.evasionTechniqueReason || 'anti-analysis' }, 35, 'threat_intel');
       categories.phishing.flagged = true;
       categories.phishing.reason = domSignals.evasionTechniqueReason || 'Phishing kit evasion technique detected';
+    }
+    if (domSignals.canvasCredentialLure && !isAllowlisted) {
+      emitSignal('SIG_CANVAS_CREDENTIAL_FORM', {}, 55, 'dom_credentials');
+      categories.phishing.flagged = true;
+      categories.phishing.reason = 'Deceptive canvas element simulating a credential form detected';
     }
 
     // C. Scam Language / PUP / ClickFix
@@ -373,6 +401,11 @@ export function calculateRisk(
     }
   }
 
+  // If legitimate federated login (Okta, Ping, Azure B2C), zero out false URL token penalties
+  if (isFederatedLogin) {
+    pointsByCategory['url'] = 0;
+  }
+
   // Combine capped scores across categories:
   // Sort category points descending: highest category takes full weight,
   // secondary categories add diminishing marginal risk (factor 0.4)
@@ -473,6 +506,14 @@ export function calculateRisk(
                                   !!(domSignals && domSignals.untrustedScreenShare);
   const hasBitbAttack = rawSignals.some(s => s.id === 'SIG_BITB_FAKE_WINDOW_ATTACK') ||
                         !!(domSignals && domSignals.bitbAttack);
+  const hasBitbPopupSpoof = rawSignals.some(s => s.id === 'SIG_BITB_FAKE_POPUP_SPOOF') ||
+                            !!(domSignals && domSignals.bitbPopupSpoof);
+  const hasWeb3DrainerRawSign = rawSignals.some(s => s.id === 'SIG_WEB3_DRAINER_RAW_SIGN') ||
+                                !!(domSignals && domSignals.web3DrainerRawSign);
+  const hasWeb3UnlimitedApproval = rawSignals.some(s => s.id === 'SIG_WEB3_UNLIMITED_APPROVAL') ||
+                                   !!(domSignals && domSignals.web3UnlimitedApproval);
+  const hasCrossOriginCredentialPost = rawSignals.some(s => s.id === 'SIG_CROSS_ORIGIN_CREDENTIAL_POST') ||
+                                       !!(domSignals && domSignals.crossOriginCredentialPost);
   const hasAitmReverseProxy = rawSignals.some(s => s.id === 'SIG_AITM_REVERSE_PROXY_PHISH') ||
                               !!(domSignals && domSignals.aitmReverseProxy);
   const hasClipboardAddressSwap = rawSignals.some(s => s.id === 'SIG_CLIPBOARD_ADDRESS_SWAP') ||
@@ -492,6 +533,7 @@ export function calculateRisk(
   const hasFaviconSpoof = rawSignals.some(s => s.id === 'SIG_FAVICON_BRAND_SPOOF');
   const hasFreeHostingTrap = rawSignals.some(s => s.id === 'SIG_FREE_HOSTING_CREDENTIAL_TRAP') || !!(domSignals && domSignals.freeHostingCredentialTrap);
   const hasEvasionTechnique = rawSignals.some(s => s.id === 'SIG_EVASION_TECHNIQUE_DETECTED') || !!(domSignals && domSignals.evasionTechniqueDetected);
+  const hasCanvasCredentialLure = rawSignals.some(s => s.id === 'SIG_CANVAS_CREDENTIAL_FORM') || !!(domSignals && domSignals.canvasCredentialLure);
 
   const hasCyberFraudOverride =
     hasIllegalWebPinCollection ||
@@ -505,10 +547,15 @@ export function calculateRisk(
     hasRemoteAccessScamDownload ||
     hasUntrustedScreenShare ||
     hasBitbAttack ||
+    hasBitbPopupSpoof ||
+    hasWeb3DrainerRawSign ||
+    hasWeb3UnlimitedApproval ||
+    hasCrossOriginCredentialPost ||
     hasAitmReverseProxy ||
     hasClipboardAddressSwap ||
     hasMaliciousQrPayload ||
     hasRoguePushOrSwTrap ||
+    hasCanvasCredentialLure ||
     hasBrandMismatchWithCredentials;
 
   const suspTlds = [
@@ -541,6 +588,14 @@ export function calculateRisk(
   } else if (hasPhishingKitWebhookExfil) {
     riskScore = Math.max(riskScore, 95);
   } else if (hasBitbAttack) {
+    riskScore = Math.max(riskScore, 95);
+  } else if (hasBitbPopupSpoof) {
+    riskScore = Math.max(riskScore, 85);
+  } else if (hasWeb3DrainerRawSign) {
+    riskScore = Math.max(riskScore, 95);
+  } else if (hasWeb3UnlimitedApproval) {
+    riskScore = Math.max(riskScore, 95);
+  } else if (hasCrossOriginCredentialPost) {
     riskScore = Math.max(riskScore, 95);
   } else if (hasAitmReverseProxy) {
     riskScore = Math.max(riskScore, 95);

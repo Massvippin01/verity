@@ -25,14 +25,15 @@ export function validateMessageSender(sender, expectedRuntimeId, message) {
     'RUNTIME_THREAT_DETECTED'
   ];
 
-  if (message && tabScopedActions.includes(message.action)) {
+  const action = message?.action || message?.type;
+  if (action && tabScopedActions.includes(action)) {
     const isInternalExtension = !sender.tab && (
       (sender.url && sender.url.startsWith('chrome-extension://' + expectedRuntimeId)) ||
       (sender.origin && sender.origin.startsWith('chrome-extension://' + expectedRuntimeId))
     );
 
     if (!isInternalExtension && (!sender.tab || sender.tab.id == null)) {
-      return { valid: false, reason: `Action ${message.action} requires a valid sender tab` };
+      return { valid: false, reason: `Action ${action} requires a valid sender tab` };
     }
 
     if (message.action === 'USER_OVERRIDE_ALLOW') {

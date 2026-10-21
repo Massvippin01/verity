@@ -86,7 +86,8 @@
         "config/*",
         "content/search/*",
         "content/search/engines/*",
-        "content/main-world-interceptor.js"
+        "content/main-world-interceptor.js",
+        "ui/*"
       ],
       "matches": ["<all_urls>"]
     }

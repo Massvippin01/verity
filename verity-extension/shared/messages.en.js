@@ -100,7 +100,12 @@
     RULE_AITM_PROXY_URL: (p) => 'URL path matches proprietary identity provider authentication endpoint on unverified domain.',
     SIG_MALICIOUS_QR_PAYLOAD: (p) => `Critical threat: Malicious QR code payload detected (${p?.type || 'Quishing / Fraudulent UPI payment'}).`,
     SIG_CLIPBOARD_ADDRESS_SWAP: (p) => `Critical threat: Malicious clipboard hijacking detected attempting to swap cryptocurrency address or UPI ID (${p?.type || 'Address Swapper'}).`,
+    SIG_CANVAS_CREDENTIAL_FORM: (p) => 'Deceptive canvas element detected simulating a fake form or interface.',
     SIG_ROGUE_PUSH_OR_SW_TRAP: (p) => 'High risk: Rogue push notification prompt or background worker registration trap blocked.',
+    SIG_BITB_FAKE_POPUP_SPOOF: (p) => `Critical threat: Browser-in-the-Browser fake address bar or login popup spoof detected${p?.spoofedOrigin ? ' impersonating ' + p.spoofedOrigin : '.'}`,
+    SIG_WEB3_DRAINER_RAW_SIGN: (p) => `Critical risk: Malicious Web3 wallet drainer raw hash signing (${p?.method || 'eth_sign'}) intercepted.`,
+    SIG_WEB3_UNLIMITED_APPROVAL: (p) => `Critical risk: Malicious Web3 wallet unlimited asset approval or permit intercepted${p?.data ? ' (' + p.data + ')' : '.'}`,
+    SIG_CROSS_ORIGIN_CREDENTIAL_POST: (p) => `Critical risk: Cross-origin form post hijacking intercepted submitting credentials to untrusted endpoint${p?.targetUrl ? ' (' + p.targetUrl + ')' : '.'}`,
 
     // ── Download Interceptor Signals ──────────────────────────────────────────
     DOWNLOAD_CHROME_DANGEROUS: (p) => 'Chrome identified this file as dangerous.',
@@ -278,6 +283,7 @@
     SIG_FAVICON_BRAND_SPOOF: 'brand_impersonation',
     SIG_CONTENT_BRAND_IMPERSONATION: 'brand_impersonation',
     SIG_BITB_FAKE_WINDOW_ATTACK: 'brand_impersonation',
+    SIG_BITB_FAKE_POPUP_SPOOF: 'brand_impersonation',
     SIG_AITM_REVERSE_PROXY_PHISH: 'brand_impersonation',
     RULE_AITM_PROXY_URL: 'brand_impersonation',
 
@@ -291,6 +297,7 @@
     PAYMENT_CARD_CVV_UNVERIFIED: 'dom_credentials',
     PAYMENT_CARD_CVV_GENERIC: 'dom_credentials',
     PAYMENT_OTP_UNVERIFIED: 'dom_credentials',
+    SIG_CANVAS_CREDENTIAL_FORM: 'dom_credentials',
 
     // Category: scam_language
     SIG_SCAM_LANGUAGE: 'scam_language',
@@ -315,6 +322,8 @@
     SIG_HIGH_PRESSURE_PAYMENT_TIMER: 'payment_phishing',
     SIG_MALICIOUS_QR_PAYLOAD: 'payment_phishing',
     SIG_CLIPBOARD_ADDRESS_SWAP: 'payment_phishing',
+    SIG_WEB3_DRAINER_RAW_SIGN: 'payment_phishing',
+    SIG_WEB3_UNLIMITED_APPROVAL: 'payment_phishing',
 
     // Category: synergy
     SIG_SYNERGY_IMPERSONATION_CREDENTIALS: 'synergy',
@@ -347,7 +356,8 @@
     SIG_PHISHING_KIT_WEBHOOK_EXFIL: 'threat_intel',
     SIG_UNTRUSTED_SCREEN_SHARE: 'threat_intel',
     SIG_FREE_HOSTING_CREDENTIAL_TRAP: 'threat_intel',
-    SIG_EVASION_TECHNIQUE_DETECTED: 'threat_intel'
+    SIG_EVASION_TECHNIQUE_DETECTED: 'threat_intel',
+    SIG_CROSS_ORIGIN_CREDENTIAL_POST: 'threat_intel'
   };
 
   /**

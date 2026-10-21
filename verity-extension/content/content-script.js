@@ -522,9 +522,11 @@ function detectBitbFakeWindowAttack() {
   }
 
   const candidateElements = querySelectorAllDeep('div, span, p, a, b, strong, section, header, [role="dialog"], [class*="modal" i], [class*="popup" i], [class*="window" i]');
-  const fakeUrlRegex = /https?:\/\/(accounts\.google\.com|login\.microsoftonline\.com|login\.live\.com|appleid\.apple\.com|github\.com\/login|api\.twitter\.com)[^\s"'>]*/i;
+  const fakeUrlRegex = /https?:\/\/(accounts\.google\.com|login\.microsoftonline\.com|login\.live\.com|appleid\.apple\.com|github\.com\/login|api\.twitter\.com|[a-zA-Z0-9-]+\.(okta|auth0|b2clogin)\.com)[^\s"'>]*/i;
 
   let matchedFakeUrl = null;
+  let hasModalContainer = false;
+
   for (const el of candidateElements) {
     if (el.children && el.children.length > 8) continue;
     const txt = (el.innerText || el.textContent || '').trim();
@@ -532,6 +534,16 @@ function detectBitbFakeWindowAttack() {
     const match = txt.match(fakeUrlRegex);
     if (match) {
       matchedFakeUrl = match[0];
+      // Verify modal/window styling
+      const container = el.closest?.('[style*="z-index"], [class*="modal" i], [class*="window" i], [class*="popup" i], [role="dialog"]') || el.parentElement?.parentElement;
+      if (container && typeof window.getComputedStyle === 'function') {
+        try {
+          const style = window.getComputedStyle(container);
+          if (style.position === 'fixed' || style.position === 'absolute' || parseInt(style.zIndex, 10) > 30) {
+            hasModalContainer = true;
+          }
+        } catch (_) {}
+      }
       break;
     }
   }
@@ -543,6 +555,15 @@ function detectBitbFakeWindowAttack() {
       const match = val.match(fakeUrlRegex);
       if (match) {
         matchedFakeUrl = match[0];
+        const container = inp.closest?.('[style*="z-index"], [class*="modal" i], [class*="window" i], [class*="popup" i], [role="dialog"]') || inp.parentElement?.parentElement;
+        if (container && typeof window.getComputedStyle === 'function') {
+          try {
+            const style = window.getComputedStyle(container);
+            if (style.position === 'fixed' || style.position === 'absolute' || parseInt(style.zIndex, 10) > 30) {
+              hasModalContainer = true;
+            }
+          } catch (_) {}
+        }
         break;
       }
     }
@@ -558,7 +579,7 @@ function detectBitbFakeWindowAttack() {
                               pageText.includes('sign in with apple') ||
                               pageText.includes('sign in to github');
 
-  if (hasAuthInput || hasWindowChromeText) {
+  if (hasAuthInput || hasWindowChromeText || hasModalContainer) {
     return {
       detected: true,
       fakeUrl: matchedFakeUrl,
@@ -566,6 +587,64 @@ function detectBitbFakeWindowAttack() {
     };
   }
 
+  return { detected: false };
+}
+
+// Browser-in-the-Browser (BitB) Structural Detector
+function detectBitbAttack() {
+  if (typeof window === 'undefined' || !window.location) return { detected: false };
+  const currentHost = (window.location.hostname || '').toLowerCase().replace(/^www\./, '');
+
+  const officialIdpDomains = [
+    'accounts.google.com',
+    'login.microsoftonline.com',
+    'login.live.com',
+    'appleid.apple.com',
+    'github.com',
+    'api.twitter.com',
+    'twitter.com',
+    'x.com'
+  ];
+
+  if (officialIdpDomains.some(d => currentHost === d || currentHost.endsWith('.' + d))) {
+    return { detected: false };
+  }
+
+  // Look for fake address bars displaying high-value HTTPS login URLs inside normal DOM elements
+  const urlBarPattern = /^https:\/\/(accounts\.google\.com|login\.microsoftonline\.com|appleid\.apple\.com|github\.com\/login|.*?\.(okta|auth0|b2clogin)\.com)/i;
+  
+  const textElements = querySelectorAllDeep('div, span, p, input[readonly], input[disabled], [role="textbox"]');
+  let fakeUrlBarFound = false;
+  let spoofedOrigin = null;
+
+  for (const el of textElements) {
+    const text = (el.value || el.textContent || '').trim();
+    if (text.length > 12 && text.length < 180 && urlBarPattern.test(text)) {
+      try {
+        const displayedHost = new URL(text).hostname;
+        if (window.location.hostname !== displayedHost) {
+          const container = el.closest?.('[style*="z-index"], [class*="modal" i], [class*="window" i], [class*="popup" i], [role="dialog"]') || el.parentElement?.parentElement;
+          if (container && typeof window.getComputedStyle === 'function') {
+            const style = window.getComputedStyle(container);
+            if (style.position === 'fixed' || style.position === 'absolute' || parseInt(style.zIndex, 10) > 30) {
+              fakeUrlBarFound = true;
+              spoofedOrigin = displayedHost;
+              break;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  if (fakeUrlBarFound) {
+    return {
+      detected: true,
+      signal: 'SIG_BITB_FAKE_POPUP_SPOOF',
+      spoofedOrigin,
+      score: 85
+    };
+  }
   return { detected: false };
 }
 
@@ -756,6 +835,25 @@ function detectTechSupportRemoteScam(text) {
   };
 }
 
+// ─── Canvas & Visual Fake Detection (OCR-Free Heuristic) ──────────────────────
+function detectCanvasFormLures() {
+  if (typeof document === 'undefined') return { detected: false };
+  try {
+    const canvases = document.querySelectorAll('canvas');
+    for (let i = 0; i < canvases.length; i++) {
+      const canvas = canvases[i];
+      const rect = canvas.getBoundingClientRect();
+      const viewportArea = (window.innerWidth || 1) * (window.innerHeight || 1);
+      const canvasArea = rect.width * rect.height;
+      const areaRatio = canvasArea / Math.max(viewportArea, 1);
+      if (areaRatio > 0.40 && (window.onkeydown || window.onkeypress || canvas.getAttribute('tabindex') || canvas.hasAttribute('contenteditable'))) {
+        return { detected: true, reason: 'Canvas element covering >40% viewport with keyboard input listeners' };
+      }
+    }
+  } catch (_) {}
+  return { detected: false };
+}
+
 // 1. Signal Collection (Stage 1) - Gated, Lighter Scan
 function collectSignals() {
   const currentHostname = window.location.hostname.toLowerCase().replace(/^www\./, '');
@@ -900,6 +998,10 @@ function collectSignals() {
 
   // Browser-in-the-Browser fake window attack
   const bitb = detectBitbFakeWindowAttack();
+  const bitbStruct = detectBitbAttack();
+  const bitbDetected = bitb.detected || bitbStruct.detected;
+  const bitbTarget = bitb.fakeUrl || bitbStruct.spoofedOrigin;
+  const bitbReason = bitb.reason || (bitbStruct.detected ? `Browser-in-the-Browser fake address bar displaying "${bitbStruct.spoofedOrigin}"` : null);
 
   // AiTM reverse-proxy DOM signatures
   const aitmDom = detectAitmReverseProxyDom();
@@ -915,6 +1017,7 @@ function collectSignals() {
   const highPressureTimer = isTrustedDomain ? false : detectHighPressureTimer(hasPaymentOrOtp);
   const freeHostingTrap = isTrustedDomain ? { detected: false } : detectFreeHostingCredentialTrap(currentHostname, hasSensitiveInputs);
   const evasionTechnique = isTrustedDomain ? { detected: false } : detectPhishingEvasionTechniques(hasSensitiveInputs);
+  const canvasLure = isTrustedDomain ? { detected: false } : detectCanvasFormLures();
 
   // Embedded media player and actual payment inputs check
   const isEmbeddedMedia = /(^|\.)(youtube(-nocookie)?\.com|youtu\.be|vimeo\.com|player\.vimeo\.com|dailymotion\.com|twitch\.tv|player\.twitch\.tv)$/i.test(currentHostname);
@@ -965,9 +1068,10 @@ function collectSignals() {
     techSupportRemoteScam: isTrustedDomain ? false : techSupportScam.detected,
     techSupportRemoteScamReason: isTrustedDomain ? null : techSupportScam.reason,
     techSupportHelpline: isTrustedDomain ? null : (techSupportScam.tool + ' ' + techSupportScam.lure),
-    bitbAttack: isTrustedDomain ? false : bitb.detected,
-    bitbTarget: isTrustedDomain ? null : bitb.fakeUrl,
-    bitbReason: isTrustedDomain ? null : bitb.reason,
+    bitbAttack: isTrustedDomain ? false : bitbDetected,
+    bitbPopupSpoof: isTrustedDomain ? false : bitbStruct.detected,
+    bitbTarget: isTrustedDomain ? null : bitbTarget,
+    bitbReason: isTrustedDomain ? null : bitbReason,
     aitmReverseProxy: isTrustedDomain ? false : aitmDom.detected,
     aitmReason: isTrustedDomain ? null : aitmDom.reason,
     maliciousQrPayload: isTrustedDomain ? false : (qrScan ? qrScan.detected : false),
@@ -985,6 +1089,8 @@ function collectSignals() {
     freeHostingReason: isTrustedDomain ? null : freeHostingTrap.reason,
     evasionTechniqueDetected: isTrustedDomain ? false : evasionTechnique.detected,
     evasionTechniqueReason: isTrustedDomain ? null : evasionTechnique.reason,
+    canvasCredentialLure: isTrustedDomain ? false : canvasLure.detected,
+    canvasCredentialReason: isTrustedDomain ? null : canvasLure.reason,
     hasUpiLink,
     pageText:  text.substring(0, 3000),
     pageTitle: (typeof document !== 'undefined' ? document.title : '') || '',
@@ -2441,11 +2547,16 @@ if (!isTrustedHostEnvironment) {
   if (typeof window !== 'undefined') {
     window.addEventListener('__VERITY_RUNTIME_THREAT__', (event) => {
       const detail = event?.detail || {};
-      const signal = detail.signal || 'SIG_PHISHING_KIT_WEBHOOK_EXFIL';
+      const signal = detail.signal ||
+        (detail.type === 'WEB3_DRAINER_RAW_SIGN' ? 'SIG_WEB3_DRAINER_RAW_SIGN' :
+         detail.type === 'WEB3_UNLIMITED_APPROVAL' ? 'SIG_WEB3_UNLIMITED_APPROVAL' :
+         detail.type === 'SIG_CROSS_ORIGIN_CREDENTIAL_POST' ? 'SIG_CROSS_ORIGIN_CREDENTIAL_POST' :
+         'SIG_PHISHING_KIT_WEBHOOK_EXFIL');
 
       if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
         chrome.runtime.sendMessage({
           action: 'RUNTIME_THREAT_DETECTED',
+          type: 'RUNTIME_THREAT_DETECTED',
           signal: signal,
           detail: detail,
           url: window.location.href
@@ -2475,6 +2586,14 @@ if (!isTrustedHostEnvironment) {
             ? 'Untrusted screen sharing capture attempt blocked.'
             : signal === 'SIG_MALVERTISING_REDIRECT'
             ? 'High-risk malvertising redirect rotator bridge blocked.'
+            : signal === 'SIG_WEB3_DRAINER_RAW_SIGN'
+            ? `Malicious Web3 wallet drainer raw hash signing (${detail.method || 'eth_sign'}) blocked.`
+            : signal === 'SIG_WEB3_UNLIMITED_APPROVAL'
+            ? 'Malicious Web3 wallet unlimited asset approval or permit blocked.'
+            : signal === 'SIG_CROSS_ORIGIN_CREDENTIAL_POST'
+            ? 'Cross-origin form post credential hijacking blocked.'
+            : signal === 'SIG_BITB_FAKE_POPUP_SPOOF'
+            ? 'Browser-in-the-Browser fake address bar spoofing blocked.'
             : 'Phishing kit credential exfiltration endpoint blocked.'
         ],
         signals: [{ id: signal, score: threatScore }]
@@ -3548,6 +3667,7 @@ if (typeof globalThis !== 'undefined') {
   globalThis.extractBrandAssetUrls = extractBrandAssetUrls;
   globalThis.detectTechSupportRemoteScam = detectTechSupportRemoteScam;
   globalThis.detectBitbFakeWindowAttack = detectBitbFakeWindowAttack;
+  globalThis.detectBitbAttack = detectBitbAttack;
   globalThis.detectAitmReverseProxyDom = detectAitmReverseProxyDom;
   globalThis.scanQrCodesOnPage = scanQrCodesOnPage;
   globalThis.inspectQrPayload = inspectQrPayload;
@@ -3569,6 +3689,7 @@ if (typeof module !== 'undefined' && module.exports) {
     extractBrandAssetUrls,
     detectTechSupportRemoteScam,
     detectBitbFakeWindowAttack,
+    detectBitbAttack,
     detectAitmReverseProxyDom,
     scanQrCodesOnPage,
     inspectQrPayload,
@@ -3578,13 +3699,12 @@ if (typeof module !== 'undefined' && module.exports) {
   };
 }
 
-
-
 // ─── Active Cross-Origin & Webhook Submit Interceptor ───────────────────────
 if (typeof document !== 'undefined') {
   document.addEventListener('submit', (event) => {
     const form = event.target;
-    if (!form) return;
+    if (!(form instanceof HTMLFormElement)) return;
+    if (isTrustedHostEnvironment) return;
 
     const pf = detectPaymentFields();
     const hasPassword = querySelectorDeep('input[type="password"]', form) !== null ||
@@ -3596,44 +3716,58 @@ if (typeof document !== 'undefined') {
     if (isBlocked) {
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation();
       try { window.stop(); } catch (_) {}
       return;
     }
 
-    let targetHost = '';
+    const rawAction = form.getAttribute('action') || form.action || '';
+    if (!rawAction || rawAction.startsWith('#') || rawAction.startsWith('/')) return;
+
     try {
-      const actionUrl = form.getAttribute('action') || form.action || '';
-      if (actionUrl && !actionUrl.startsWith('#') && !actionUrl.startsWith('javascript:')) {
-        targetHost = new URL(actionUrl, window.location.href).hostname.toLowerCase();
+      const actionUrl = new URL(rawAction, window.location.href);
+      const currentHost = (window.location.hostname || '').toLowerCase();
+      const targetHost = (actionUrl.hostname || '').toLowerCase();
+
+      const isDifferentRoot = !targetHost.endsWith(currentHost.split('.').slice(-2).join('.'));
+      const isSuspiciousEndpoint = /api\.telegram\.org|discord(app)?\.com|formspree\.io|getform\.io|webhook\.site|pipedream\.net|hookbin\.com|requestcatcher\.com/i.test(targetHost);
+      const isRawIp = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(targetHost);
+      const isHttpExfil = isDifferentRoot && actionUrl.protocol === 'http:';
+
+      const webhookDetected = detectPhishingKitWebhookExfil(true).detected;
+      const pinCollection = detectIllegalWebPinCollection().detected;
+
+      if (isSuspiciousEndpoint || isRawIp || isHttpExfil || isDifferentRoot || webhookDetected || pinCollection) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        try { window.stop(); } catch (_) {}
+
+        const reasonMsg = webhookDetected ? 'Critical threat: Form transmits stolen data to external webhook/bot.' :
+                          pinCollection ? 'Critical financial fraud: Illegal UPI PIN submission intercepted.' :
+                          `Critical risk: Form transmits sensitive credentials to an untrusted external domain (${targetHost}).`;
+
+        if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+          chrome.runtime.sendMessage({
+            action: 'RUNTIME_THREAT_DETECTED',
+            type: 'RUNTIME_THREAT_DETECTED',
+            signal: 'SIG_CROSS_ORIGIN_CREDENTIAL_POST',
+            targetUrl: actionUrl.href,
+            url: window.location.href,
+            score: 95
+          }).catch(() => {});
+        }
+
+        handleEnforcementVerdict({
+          action: 'block',
+          severity: 'danger',
+          state: 'danger',
+          score: 95,
+          riskScore: 95,
+          reasons: [reasonMsg],
+          signals: [{ id: 'SIG_CROSS_ORIGIN_CREDENTIAL_POST', score: 95 }]
+        });
       }
     } catch (_) {}
-
-    const currentHost = window.location.hostname.toLowerCase();
-    const currentRoot = getBaseDomain(currentHost);
-    const targetRoot = getBaseDomain(targetHost);
-
-    const isCrossDomainExfil = !!(targetHost && targetRoot && currentRoot && targetRoot !== currentRoot);
-    const webhookDetected = detectPhishingKitWebhookExfil(true).detected;
-    const pinCollection = detectIllegalWebPinCollection().detected;
-
-    if (isCrossDomainExfil || webhookDetected || pinCollection) {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      try { window.stop(); } catch (_) {}
-
-      const reasonMsg = webhookDetected ? 'Critical threat: Form transmits stolen data to external webhook/bot.' :
-                        pinCollection ? 'Critical financial fraud: Illegal UPI PIN submission intercepted.' :
-                        `Critical risk: Form transmits sensitive credentials to an untrusted external domain (${targetHost}).`;
-
-      handleEnforcementVerdict({
-        action: 'block',
-        severity: 'danger',
-        state: 'danger',
-        score: 95,
-        riskScore: 95,
-        reasons: [reasonMsg]
-      });
-    }
   }, true);
 }
