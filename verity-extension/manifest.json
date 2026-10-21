@@ -87,6 +87,7 @@
         "content/search/*",
         "content/search/engines/*",
         "content/main-world-interceptor.js",
+        "content/bharat-scam-detectors.js",
         "ui/*"
       ],
       "matches": ["<all_urls>"]

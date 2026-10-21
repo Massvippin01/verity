@@ -106,6 +106,9 @@
     SIG_WEB3_DRAINER_RAW_SIGN: (p) => `Critical risk: Malicious Web3 wallet drainer raw hash signing (${p?.method || 'eth_sign'}) intercepted.`,
     SIG_WEB3_UNLIMITED_APPROVAL: (p) => `Critical risk: Malicious Web3 wallet unlimited asset approval or permit intercepted${p?.data ? ' (' + p.data + ')' : '.'}`,
     SIG_CROSS_ORIGIN_CREDENTIAL_POST: (p) => `Critical risk: Cross-origin form post hijacking intercepted submitting credentials to untrusted endpoint${p?.targetUrl ? ' (' + p.targetUrl + ')' : '.'}`,
+    SIG_DIGITAL_ARREST_EXTORTION: (p) => `Critical cyber fraud: Digital Arrest extortion scam detected impersonating law enforcement (${p?.phrase || 'fake police/CBI warrant'}).`,
+    SIG_MALICIOUS_APK_DROPPER: (p) => `Critical threat: Malicious Android APK dropper detected (${p?.filename || 'unverified APK'}) targeting Indian citizens.`,
+    SIG_UPI_QR_COLLECT_TRAP: (p) => `Critical financial fraud: Deceptive UPI QR collect trap detected masquerading as incoming cashback/refund (${p?.lurePhrase || 'QR code'}).`,
 
     // ── Download Interceptor Signals ──────────────────────────────────────────
     DOWNLOAD_CHROME_DANGEROUS: (p) => 'Chrome identified this file as dangerous.',
@@ -306,6 +309,7 @@
     SIG_PUP: 'scam_language',
     SIG_FINANCIAL_CONTEXT: 'scam_language',
     SIG_DIGITAL_ARREST_SCAM: 'scam_language',
+    SIG_DIGITAL_ARREST_EXTORTION: 'scam_language',
     SIG_UPI_DEBIT_TRAP: 'scam_language',
     PAYMENT_UNKNOWN_PROVIDER: 'scam_language',
     PAYMENT_FORM_DETECTED: 'scam_language',
@@ -324,6 +328,7 @@
     SIG_CLIPBOARD_ADDRESS_SWAP: 'payment_phishing',
     SIG_WEB3_DRAINER_RAW_SIGN: 'payment_phishing',
     SIG_WEB3_UNLIMITED_APPROVAL: 'payment_phishing',
+    SIG_UPI_QR_COLLECT_TRAP: 'payment_phishing',
 
     // Category: synergy
     SIG_SYNERGY_IMPERSONATION_CREDENTIALS: 'synergy',
@@ -334,6 +339,7 @@
     DOWNLOAD_CHROME_DANGEROUS: 'download',
     SIG_REMOTE_ACCESS_SCAM_DOWNLOAD: 'download',
     SIG_HTML_SMUGGLING_DOWNLOAD: 'download',
+    SIG_MALICIOUS_APK_DROPPER: 'download',
     DOWNLOAD_EXECUTABLE: 'download',
     DOWNLOAD_SCRIPT: 'download',
     DOWNLOAD_INSTALLER: 'download',

@@ -502,6 +502,143 @@ function detectPhishingEvasionTechniques(hasSensitiveInputs) {
   return { detected: false, reason: null, technique: null };
 }
 
+// ── Bharat Cyber Fraud Sentinel Detectors ──────────────────────────────────
+const BHARAT_LAW_ENFORCEMENT_LURES = [
+  'digital arrest', 'cbi cyber crime', 'cbi investigation', 'narcotics parcel',
+  'customs seizure warrant', 'trai mobile disconnection', 'money laundering investigation',
+  'supreme court digital notice', 'delhi police crime branch', 'ed notice',
+  'mha cyber cell', 'mumbai police crime branch', 'cyber crime cell notice',
+  'interpol notice', 'fedex narcotics parcel', 'virtual arrest warrant',
+  'narcotics control bureau notice'
+];
+
+const BHARAT_EXTORTION_DEMAND_TERMS = [
+  'arrest warrant', 'video call', 'skype', 'stay on call', 'do not disconnect',
+  'bail amount', 'clearance fee', 'transfer money to verify', 'rbi safe account',
+  'rbi verification account', 'immediate arrest', 'penalty of rs', 'pay fine immediately',
+  'asset freezing order', 'virtual court'
+];
+
+const BHARAT_KNOWN_MALICIOUS_APKS = [
+  'rto_challan.apk', 'echallan.apk', 'pm_kisan.apk', 'sbi_kyc.apk',
+  'electricity_bill.apk', 'wedding_card.apk', 'aadhaar_update.apk',
+  'voter_card.apk', 'bsnl_5g.apk', 'paytm_update.apk', 'pan_card.apk',
+  'police_challan.apk', 'yojana.apk', 'invitation_card.apk'
+];
+
+const BHARAT_APK_LURE_KEYWORDS = [
+  'challan', 'kyc', 'kisan', 'yojana', 'police', 'bill',
+  'wedding', 'card', 'aadhaar', 'update', 'subsidy', 'invitation'
+];
+
+const BHARAT_DECEPTIVE_RECEIVE_LURES = [
+  'receive cashback', 'claim reward', 'refund amount', 'scan to receive',
+  'olx buyer payment', 'lottery prize', 'receive payment', 'accept payment',
+  'claim bonus', 'scan qr to get money', 'scan to credit', 'scan & receive',
+  'claim your refund', 'instant refund', 'cashback won', 'scan code to accept'
+];
+
+function detectDigitalArrestAndApkScams(pageText = '', linkUrls = []) {
+  const text = (pageText || '').toLowerCase();
+
+  const hasEnforcementLure = BHARAT_LAW_ENFORCEMENT_LURES.some(l => text.includes(l));
+  const hasExtortionDemand = BHARAT_EXTORTION_DEMAND_TERMS.some(d => text.includes(d));
+
+  if (hasEnforcementLure && (hasExtortionDemand || text.includes('under digital arrest') || text.includes('virtual arrest'))) {
+    const matchedLure = BHARAT_LAW_ENFORCEMENT_LURES.find(l => text.includes(l)) || 'digital arrest';
+    return {
+      detected: true,
+      type: 'DIGITAL_ARREST',
+      signal: 'SIG_DIGITAL_ARREST_EXTORTION',
+      reason: `Digital Arrest extortion pattern detected impersonating law enforcement: "${matchedLure}"`,
+      phrase: matchedLure
+    };
+  }
+
+  const allLinks = Array.isArray(linkUrls) ? linkUrls : [];
+  for (const rawLink of allLinks) {
+    const link = (rawLink || '').toLowerCase();
+    if (link.includes('.apk')) {
+      const apkNameMatch = link.match(/([a-zA-Z0-9_\-.]+\.apk)/i);
+      const apkName = apkNameMatch ? apkNameMatch[1] : 'unverified.apk';
+
+      if (BHARAT_KNOWN_MALICIOUS_APKS.some(k => apkName.includes(k)) || BHARAT_APK_LURE_KEYWORDS.some(k => link.includes(k) || text.includes(k))) {
+        return {
+          detected: true,
+          type: 'MALICIOUS_APK',
+          signal: 'SIG_MALICIOUS_APK_DROPPER',
+          reason: `Malicious Android APK dropper detected: "${apkName}"`,
+          filename: apkName
+        };
+      }
+    }
+  }
+
+  const textApkMatch = text.match(/\b([a-zA-Z0-9_\-.]+\.apk)\b/i);
+  if (textApkMatch) {
+    const apkName = textApkMatch[1];
+    if (BHARAT_KNOWN_MALICIOUS_APKS.some(k => apkName.includes(k)) || BHARAT_APK_LURE_KEYWORDS.some(k => text.includes(k))) {
+      return {
+        detected: true,
+        type: 'MALICIOUS_APK',
+        signal: 'SIG_MALICIOUS_APK_DROPPER',
+        reason: `Malicious Android APK dropper referenced on page: "${apkName}"`,
+        filename: apkName
+      };
+    }
+  }
+
+  return { detected: false };
+}
+
+function detectUpiQrCollectTrap(domDocument) {
+  const doc = domDocument || (typeof document !== 'undefined' ? document : null);
+  if (!doc) return { detected: false };
+
+  let textCorpus = '';
+  try {
+    textCorpus = (doc.body ? doc.body.innerText || doc.body.textContent || '' : '').toLowerCase();
+  } catch (_) {
+    textCorpus = '';
+  }
+
+  const matchedLure = BHARAT_DECEPTIVE_RECEIVE_LURES.find(lure => textCorpus.includes(lure));
+  if (!matchedLure) {
+    return { detected: false };
+  }
+
+  let hasUpiIntent = false;
+  let upiUri = '';
+
+  try {
+    const upiLinks = doc.querySelectorAll ? doc.querySelectorAll('a[href^="upi://pay" i], [data-upi*="upi://pay" i]') : [];
+    if (upiLinks && upiLinks.length > 0) {
+      hasUpiIntent = true;
+      upiUri = upiLinks[0].getAttribute('href') || upiLinks[0].getAttribute('data-upi') || '';
+    }
+  } catch (_) {}
+
+  let hasQrElement = false;
+  try {
+    const qrElements = doc.querySelectorAll ? doc.querySelectorAll('img[src*="qr" i], img[alt*="qr" i], img[alt*="upi" i], canvas, [class*="qr" i], [id*="qr" i]') : [];
+    if (qrElements && qrElements.length > 0) {
+      hasQrElement = true;
+    }
+  } catch (_) {}
+
+  if (hasUpiIntent || hasQrElement || textCorpus.includes('upi://pay')) {
+    return {
+      detected: true,
+      signal: 'SIG_UPI_QR_COLLECT_TRAP',
+      reason: `Deceptive UPI QR collect trap detected pairing "${matchedLure}" with money deduction trigger.`,
+      upiUri: upiUri || 'upi://pay',
+      lurePhrase: matchedLure
+    };
+  }
+
+  return { detected: false };
+}
+
 function detectBitbFakeWindowAttack() {
   if (typeof window === 'undefined' || !window.location) return { detected: false };
   const currentHost = (window.location.hostname || '').toLowerCase().replace(/^www\./, '');
@@ -1019,6 +1156,24 @@ function collectSignals() {
   const evasionTechnique = isTrustedDomain ? { detected: false } : detectPhishingEvasionTechniques(hasSensitiveInputs);
   const canvasLure = isTrustedDomain ? { detected: false } : detectCanvasFormLures();
 
+  // Bharat Cyber Fraud Sentinel: Digital Arrest, Fake APK Droppers, and UPI QR Traps
+  const linkElements = querySelectorAllDeep('a[href]');
+  const pageLinkUrls = Array.from(linkElements).map(a => a.getAttribute('href') || a.href || '').filter(Boolean);
+
+  const bharatDetectors = (typeof detectDigitalArrestAndApkScams === 'function')
+    ? { detectDigitalArrestAndApkScams, detectUpiQrCollectTrap }
+    : (typeof globalThis !== 'undefined' && globalThis.BharatScamDetectors)
+    ? globalThis.BharatScamDetectors
+    : (typeof require === 'function' ? (function () { try { return require('./bharat-scam-detectors.js'); } catch (_) { return {}; } })() : {});
+
+  const bharatScam = (!isTrustedDomain && bharatDetectors && typeof bharatDetectors.detectDigitalArrestAndApkScams === 'function')
+    ? bharatDetectors.detectDigitalArrestAndApkScams(text, pageLinkUrls)
+    : { detected: false };
+
+  const upiQrCollect = (!isTrustedDomain && bharatDetectors && typeof bharatDetectors.detectUpiQrCollectTrap === 'function')
+    ? bharatDetectors.detectUpiQrCollectTrap(typeof document !== 'undefined' ? document : null)
+    : { detected: false };
+
   // Embedded media player and actual payment inputs check
   const isEmbeddedMedia = /(^|\.)(youtube(-nocookie)?\.com|youtu\.be|vimeo\.com|player\.vimeo\.com|dailymotion\.com|twitch\.tv|player\.twitch\.tv)$/i.test(currentHostname);
   const hasActualPaymentInputs = !!(
@@ -1091,6 +1246,15 @@ function collectSignals() {
     evasionTechniqueReason: isTrustedDomain ? null : evasionTechnique.reason,
     canvasCredentialLure: isTrustedDomain ? false : canvasLure.detected,
     canvasCredentialReason: isTrustedDomain ? null : canvasLure.reason,
+    digitalArrestExtortion: isTrustedDomain ? false : (bharatScam.detected && bharatScam.type === 'DIGITAL_ARREST'),
+    digitalArrestReason: isTrustedDomain ? null : bharatScam.reason,
+    digitalArrestPhrase: isTrustedDomain ? null : bharatScam.phrase,
+    maliciousApkDropper: isTrustedDomain ? false : (bharatScam.detected && bharatScam.type === 'MALICIOUS_APK'),
+    maliciousApkReason: isTrustedDomain ? null : bharatScam.reason,
+    maliciousApkFilename: isTrustedDomain ? null : bharatScam.filename,
+    upiQrCollectTrap: isTrustedDomain ? false : upiQrCollect.detected,
+    upiQrReason: isTrustedDomain ? null : upiQrCollect.reason,
+    upiQrLure: isTrustedDomain ? null : upiQrCollect.lurePhrase,
     hasUpiLink,
     pageText:  text.substring(0, 3000),
     pageTitle: (typeof document !== 'undefined' ? document.title : '') || '',
@@ -3674,6 +3838,8 @@ if (typeof globalThis !== 'undefined') {
   globalThis.detectQrFromDomAttributes = detectQrFromDomAttributes;
   globalThis.detectFreeHostingCredentialTrap = detectFreeHostingCredentialTrap;
   globalThis.detectPhishingEvasionTechniques = detectPhishingEvasionTechniques;
+  globalThis.detectDigitalArrestAndApkScams = detectDigitalArrestAndApkScams;
+  globalThis.detectUpiQrCollectTrap = detectUpiQrCollectTrap;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -3696,6 +3862,8 @@ if (typeof module !== 'undefined' && module.exports) {
     detectQrFromDomAttributes,
     detectFreeHostingCredentialTrap,
     detectPhishingEvasionTechniques,
+    detectDigitalArrestAndApkScams,
+    detectUpiQrCollectTrap,
   };
 }
 

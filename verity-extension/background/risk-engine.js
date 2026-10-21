@@ -248,6 +248,21 @@ export function calculateRisk(
       categories.phishing.flagged = true;
       categories.phishing.reason = 'Deceptive canvas element simulating a credential form detected';
     }
+    if (domSignals.digitalArrestExtortion && !isAllowlisted) {
+      emitSignal('SIG_DIGITAL_ARREST_EXTORTION', { phrase: domSignals.digitalArrestPhrase || 'fake law enforcement warrant' }, 85, 'dom');
+      categories.scamFraud.flagged = true;
+      categories.scamFraud.reason = domSignals.digitalArrestReason || 'Digital Arrest extortion scam pattern detected';
+    }
+    if (domSignals.maliciousApkDropper && !isAllowlisted) {
+      emitSignal('SIG_MALICIOUS_APK_DROPPER', { filename: domSignals.maliciousApkFilename || 'unverified APK' }, 90, 'dom');
+      categories.scamFraud.flagged = true;
+      categories.scamFraud.reason = domSignals.maliciousApkReason || 'Malicious Android APK dropper detected';
+    }
+    if (domSignals.upiQrCollectTrap && !isAllowlisted) {
+      emitSignal('SIG_UPI_QR_COLLECT_TRAP', { lurePhrase: domSignals.upiQrLure || 'cashback/refund QR trap' }, 85, 'dom');
+      categories.scamFraud.flagged = true;
+      categories.scamFraud.reason = domSignals.upiQrReason || 'Deceptive UPI QR code collect trap detected';
+    }
 
     // C. Scam Language / PUP / ClickFix
     if (domSignals.clickFixAttack) {
@@ -534,12 +549,18 @@ export function calculateRisk(
   const hasFreeHostingTrap = rawSignals.some(s => s.id === 'SIG_FREE_HOSTING_CREDENTIAL_TRAP') || !!(domSignals && domSignals.freeHostingCredentialTrap);
   const hasEvasionTechnique = rawSignals.some(s => s.id === 'SIG_EVASION_TECHNIQUE_DETECTED') || !!(domSignals && domSignals.evasionTechniqueDetected);
   const hasCanvasCredentialLure = rawSignals.some(s => s.id === 'SIG_CANVAS_CREDENTIAL_FORM') || !!(domSignals && domSignals.canvasCredentialLure);
+  const hasDigitalArrestExtortion = rawSignals.some(s => s.id === 'SIG_DIGITAL_ARREST_EXTORTION') || !!(domSignals && domSignals.digitalArrestExtortion);
+  const hasMaliciousApkDropper = rawSignals.some(s => s.id === 'SIG_MALICIOUS_APK_DROPPER') || !!(domSignals && domSignals.maliciousApkDropper);
+  const hasUpiQrCollectTrap = rawSignals.some(s => s.id === 'SIG_UPI_QR_COLLECT_TRAP') || !!(domSignals && domSignals.upiQrCollectTrap);
 
   const hasCyberFraudOverride =
     hasIllegalWebPinCollection ||
     hasPhishingKitWebhookExfil ||
     hasCredentialExfil ||
     hasKycCyberFraud ||
+    hasDigitalArrestExtortion ||
+    hasMaliciousApkDropper ||
+    hasUpiQrCollectTrap ||
     hasBrandAssetHotlinkSpoof ||
     hasFaviconSpoof ||
     hasFreeHostingTrap ||
@@ -597,6 +618,12 @@ export function calculateRisk(
     riskScore = Math.max(riskScore, 95);
   } else if (hasCrossOriginCredentialPost) {
     riskScore = Math.max(riskScore, 95);
+  } else if (hasMaliciousApkDropper) {
+    riskScore = Math.max(riskScore, 90);
+  } else if (hasDigitalArrestExtortion) {
+    riskScore = Math.max(riskScore, 85);
+  } else if (hasUpiQrCollectTrap) {
+    riskScore = Math.max(riskScore, 85);
   } else if (hasAitmReverseProxy) {
     riskScore = Math.max(riskScore, 95);
   } else if (hasClipboardAddressSwap) {
