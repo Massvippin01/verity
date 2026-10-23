@@ -109,6 +109,24 @@
     SIG_DIGITAL_ARREST_EXTORTION: (p) => `Critical cyber fraud: Digital Arrest extortion scam detected impersonating law enforcement (${p?.phrase || 'fake police/CBI warrant'}).`,
     SIG_MALICIOUS_APK_DROPPER: (p) => `Critical threat: Malicious Android APK dropper detected (${p?.filename || 'unverified APK'}) targeting Indian citizens.`,
     SIG_UPI_QR_COLLECT_TRAP: (p) => `Critical financial fraud: Deceptive UPI QR collect trap detected masquerading as incoming cashback/refund (${p?.lurePhrase || 'QR code'}).`,
+    SIG_FREE_HOST_CREDENTIAL_PHISH: (p) => `High risk: Phishing kit or credential harvesting page hosted on a free multi-tenant platform or tunnel (${p?.platform || 'free hosting'}).`,
+    SIG_DOM_BRAND_IMPERSONATION: (p) => `Critical threat: Page title or heading claims to be "${p?.brand || 'Official Institution'}" requesting credentials on an unauthorized domain.`,
+    SIG_DECEPTIVE_SHORTENER_LURE: (p) => `High risk: Shortened link paired with urgent banking, KYC, or financial lure (${p?.lure || 'deceptive shortener'}).`,
+    SIG_URL_SHORTENER_CAUTION: (p) => `Shortened link (${p?.shortener || 'short URL'}) hides the real destination website. Official banks and government agencies rarely use public link shorteners like bit.ly or tinyurl.`,
+    SIG_UTILITY_BILL_EXTORTION: (p) => `Critical cyber fraud: Fake electricity or utility bill disconnection threat scaring citizens into immediate payment (${p?.utility || 'power cut threat'}).`,
+    SIG_FAKE_PARCEL_DELIVERY_LURE: (p) => `High risk: Fake India Post or courier package delivery failed lure demanding address verification or fee (${p?.courier || 'fake parcel hold'}).`,
+    SIG_NPCI_UNSIGNED_COLLECT_FORENSIC: (p) => `Critical NPCI forensic violation: Unsigned P2P UPI payment intent requesting debit under false pretenses (${p?.payeeVpa || 'unverified payee'}).`,
+    SIG_CROSS_ORIGIN_BRAND_ASSET_THEFT: (p) => `Critical brand impersonation: Hotlinked official favicon or logo directly from "${p?.brand || 'official brand'}" on an unauthorized credential harvesting page.`,
+    SIG_REALTIME_KEYLOGGER_HONEYTOKEN_TRIPPED: (p) => 'Critical security defense: Keystroke keylogger intercepted harvesting sensitive card/PIN data; honey-token poisoned.',
+    SIG_SURVEILLANCE_EXTORTION_TRAP: (p) => `Critical cyber fraud: Digital Arrest surveillance trap demanding camera/microphone access under fake law enforcement authority (${p?.phrase || 'unauthorized surveillance'}).`,
+    SIG_MALVERTISING_REDIRECT_CHAIN: (p) => `High risk malvertising: Rapid multi-hop redirect traversal across suspicious ad rotators (${p?.hopCount || 3} hops in ${p?.elapsedMs || 'rapid'}ms).`,
+    SIG_TAB_UNDER_HIJACK: (p) => 'Critical malvertising: Tab-under background swap detected silently redirecting to an unverified domain.',
+    SIG_ARCHIVE_PASSWORD_STEALER_LURE: (p) => `Critical malware lure: Password-protected archive trap (${p?.phrase || 'archive password'}) evading antivirus inspection to distribute stealer trojans.`,
+    SIG_CLICKJACK_INVISIBLE_OVERLAY: (p) => 'High risk: Invisible full-screen clickjack overlay detected to hijack user interactions into ad rotators.',
+    SIG_FAKE_DOWNLOAD_BUTTON_TRAP: (p) => `High risk: Deceptive download button routing to an untrusted external ad rotator or executable payload${p?.target ? ' (' + p.target + ')' : '.'}`,
+    SIG_NOTIFICATION_PERMISSION_TRAP: (p) => 'Deceptive notification gate: Coercing browser push notifications under the guise of download verification.',
+    SIG_FILE_MAGIC_BYTE_SPOOF: (p) => `Critical threat: Executable binary disguised as a document or media file (${p?.fileName || 'disguised file'}).`,
+    SIG_ARCHIVE_DISGUISED_AS_DOC: (p) => `Critical threat: Archive or APK dropper disguised as a document (${p?.fileName || 'disguised archive'}).`,
 
     // ── Download Interceptor Signals ──────────────────────────────────────────
     DOWNLOAD_CHROME_DANGEROUS: (p) => 'Chrome identified this file as dangerous.',
@@ -264,6 +282,7 @@
     RULE_PIRACY_MEDIA: 'url',
     SIG_URL_SUSPICIOUS: 'url',
     SIG_NEWLY_REGISTERED_DOMAIN: 'url',
+    SIG_URL_SHORTENER_CAUTION: 'url',
 
     // Category: ip_host (high-confidence network track)
     RULE_IP_BASED_URL: 'ip_host',
@@ -275,6 +294,11 @@
     SIG_MALVERTISING_REDIRECT: 'malvertising',
     SIG_POPUNDER_SPAWN: 'malvertising',
     SIG_ROGUE_PUSH_OR_SW_TRAP: 'malvertising',
+    SIG_MALVERTISING_REDIRECT_CHAIN: 'malvertising',
+    SIG_TAB_UNDER_HIJACK: 'malvertising',
+    SIG_CLICKJACK_INVISIBLE_OVERLAY: 'malvertising',
+    SIG_FAKE_DOWNLOAD_BUTTON_TRAP: 'malvertising',
+    SIG_NOTIFICATION_PERMISSION_TRAP: 'malvertising',
 
     // Category: brand_impersonation
     RULE_BRAND_NAME_WRONG_DOMAIN: 'brand_impersonation',
@@ -289,6 +313,9 @@
     SIG_BITB_FAKE_POPUP_SPOOF: 'brand_impersonation',
     SIG_AITM_REVERSE_PROXY_PHISH: 'brand_impersonation',
     RULE_AITM_PROXY_URL: 'brand_impersonation',
+    SIG_FREE_HOST_CREDENTIAL_PHISH: 'brand_impersonation',
+    SIG_DOM_BRAND_IMPERSONATION: 'brand_impersonation',
+    SIG_CROSS_ORIGIN_BRAND_ASSET_THEFT: 'brand_impersonation',
 
     // Category: ml
     SIG_ML_PHISHING: 'ml',
@@ -301,6 +328,7 @@
     PAYMENT_CARD_CVV_GENERIC: 'dom_credentials',
     PAYMENT_OTP_UNVERIFIED: 'dom_credentials',
     SIG_CANVAS_CREDENTIAL_FORM: 'dom_credentials',
+    SIG_REALTIME_KEYLOGGER_HONEYTOKEN_TRIPPED: 'dom_credentials',
 
     // Category: scam_language
     SIG_SCAM_LANGUAGE: 'scam_language',
@@ -315,6 +343,11 @@
     PAYMENT_FORM_DETECTED: 'scam_language',
     SIG_KYC_CYBER_FRAUD: 'scam_language',
     SIG_TECH_SUPPORT_REMOTE_SCAM: 'scam_language',
+    SIG_DECEPTIVE_SHORTENER_LURE: 'scam_language',
+    SIG_UTILITY_BILL_EXTORTION: 'scam_language',
+    SIG_FAKE_PARCEL_DELIVERY_LURE: 'scam_language',
+    SIG_SURVEILLANCE_EXTORTION_TRAP: 'scam_language',
+    SIG_ARCHIVE_PASSWORD_STEALER_LURE: 'scam_language',
 
     // Category: payment_phishing
     PAYMENT_FAKE_PROVIDER: 'payment_phishing',
@@ -329,6 +362,7 @@
     SIG_WEB3_DRAINER_RAW_SIGN: 'payment_phishing',
     SIG_WEB3_UNLIMITED_APPROVAL: 'payment_phishing',
     SIG_UPI_QR_COLLECT_TRAP: 'payment_phishing',
+    SIG_NPCI_UNSIGNED_COLLECT_FORENSIC: 'payment_phishing',
 
     // Category: synergy
     SIG_SYNERGY_IMPERSONATION_CREDENTIALS: 'synergy',
@@ -340,6 +374,8 @@
     SIG_REMOTE_ACCESS_SCAM_DOWNLOAD: 'download',
     SIG_HTML_SMUGGLING_DOWNLOAD: 'download',
     SIG_MALICIOUS_APK_DROPPER: 'download',
+    SIG_FILE_MAGIC_BYTE_SPOOF: 'download',
+    SIG_ARCHIVE_DISGUISED_AS_DOC: 'download',
     DOWNLOAD_EXECUTABLE: 'download',
     DOWNLOAD_SCRIPT: 'download',
     DOWNLOAD_INSTALLER: 'download',

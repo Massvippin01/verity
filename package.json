@@ -2,12 +2,15 @@
   "name": "verity-root",
   "version": "2.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "test": "npm --prefix verity-extension test",
+    "build:mobile": "npm --prefix verity-extension run build:mobile",
     "evaluate": "npm --prefix verity-extension run evaluate",
     "judge": "npm --prefix verity-extension run judge",
     "demo": "node verity_demo_server.js",
-    "benchmark": "npm --prefix verity-extension run benchmark",
+    "benchmark": "node scripts/bench.js",
+    "bench": "node scripts/bench.js",
     "e2e": "npm --prefix verity-extension run e2e"
   }
 }

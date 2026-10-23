@@ -961,3 +961,69 @@ export function hasAitmProxyUrlSignature(urlString) {
 export function hasHomographAttack(urlString, brandsList) {
   return detectHomographAttack(urlString, brandsList);
 }
+
+/**
+ * Free hosting and tunnel domain suffixes heavily abused by real-world phishing kits.
+ */
+export const ABUSED_FREE_HOSTING_SUFFIXES = [
+  '.pages.dev',
+  '.vercel.app',
+  '.netlify.app',
+  '.firebaseapp.com',
+  '.web.app',
+  '.github.io',
+  '.glitch.me',
+  '.onrender.com',
+  '.ngrok-free.app',
+  '.ngrok.io',
+  '.trycloudflare.com',
+  '.loca.lt',
+  '.workers.dev',
+  '.000webhostapp.com',
+  '.weebly.com',
+  '.blogspot.com'
+];
+
+/**
+ * Checks if a hostname belongs to an abused free developer hosting platform or tunnel.
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+export function isAbusedFreeHostingOrTunnel(hostname) {
+  if (!hostname || typeof hostname !== 'string') return false;
+  const h = hostname.toLowerCase().trim().replace(/^www\./, '');
+  return ABUSED_FREE_HOSTING_SUFFIXES.some(suffix => h.endsWith(suffix));
+}
+
+/**
+ * Known public link shortener domains commonly abused in smishing and phishing.
+ */
+export const KNOWN_URL_SHORTENERS = [
+  'bit.ly',
+  'tinyurl.com',
+  'rb.gy',
+  'cutt.ly',
+  'is.gd',
+  't.ly',
+  'shorturl.at',
+  'tiny.cc',
+  'ow.ly',
+  'bitly.com',
+  'buff.ly',
+  't.co',
+  'goo.gl',
+  'rebrand.ly',
+  'rotf.lol',
+  's.id'
+];
+
+/**
+ * Checks if a hostname belongs to a known URL shortener service.
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+export function isUrlShortener(hostname) {
+  if (!hostname || typeof hostname !== 'string') return false;
+  const h = hostname.toLowerCase().trim().replace(/^www\./, '');
+  return KNOWN_URL_SHORTENERS.some(s => h === s || h.endsWith('.' + s));
+}

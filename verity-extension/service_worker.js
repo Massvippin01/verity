@@ -20,6 +20,7 @@ import { isAllowlistedDomain } from './shared/legit-domains.js';
 import { initDnrBlocker } from './background/dnr-blocker.js';
 import { getDomain } from './shared/psl.js';
 import { t } from './shared/messages.js';
+import { scanText } from './shared/text-scanner.js';
 export { validateMessageSender };
 
 export function isSafeAllowlistedOrTopDomain(url) {
@@ -1329,13 +1330,62 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
-  // Popup asks for current verdict
-  if (message.action === 'GET_VERDICT') {
-    const reqTabId = message.tabId;
-    chrome.storage.session.get(reqTabId.toString()).then(result => {
-      sendResponse(result[reqTabId.toString()] || null);
-    }).catch(() => sendResponse(null));
-    return true; // async response
+  // Popup asks for current verdict (supports GET_TAB_VERDICT and GET_VERDICT)
+  if (message.action === 'GET_TAB_VERDICT' || message.action === 'GET_VERDICT') {
+    const targetTabId = message.tabId != null ? message.tabId : (sender.tab ? sender.tab.id : null);
+    if (!targetTabId) {
+      sendResponse({ verdict: null });
+      return false;
+    }
+    const tabKey = targetTabId.toString();
+    const numTabId = typeof targetTabId === 'string' ? parseInt(targetTabId, 10) : targetTabId;
+    const memVerdict = tabRiskState.has(numTabId) ? tabRiskState.get(numTabId) : null;
+
+    if (chrome.storage && chrome.storage.session) {
+      chrome.storage.session.get(tabKey).then(async (result) => {
+        let storedVerdict = result ? result[tabKey] : null;
+        if (!storedVerdict && memVerdict) {
+          storedVerdict = memVerdict;
+        }
+        // If still null on cold start, inspect the tab URL
+        if (!storedVerdict && chrome.tabs && chrome.tabs.get) {
+          try {
+            const tab = await chrome.tabs.get(numTabId);
+            if (tab && tab.url && !isInternalUrl(tab.url)) {
+              if (isSafeAllowlistedOrTopDomain(tab.url)) {
+                storedVerdict = createSafeAllowVerdict(tab.url);
+              } else {
+                const ruleSignals = await analyzeUrl(tab.url);
+                if (ruleSignals) {
+                  const threatIntel = await checkReputation(tab.url);
+                  storedVerdict = calculateRisk(tab.url, ruleSignals, null, null, threatIntel);
+                  storedVerdict.url = tab.url;
+                }
+              }
+              if (storedVerdict) {
+                storeAndEnforce(numTabId, storedVerdict, 0);
+              }
+            }
+          } catch (_) {}
+        }
+        sendResponse({ verdict: storedVerdict, ...(storedVerdict || {}) });
+      }).catch(() => {
+        sendResponse({ verdict: memVerdict, ...(memVerdict || {}) });
+      });
+      return true; // Keep channel open
+    } else {
+      sendResponse({ verdict: memVerdict, ...(memVerdict || {}) });
+      return false;
+    }
+  }
+
+  // Quick scam / message / link evaluation endpoint
+  if (message.action === 'CHECK_TEXT' || message.action === 'EVALUATE_TEXT') {
+    const textToScan = message.text || message.input || '';
+    const brands = brandsList && brandsList.length > 0 ? brandsList : [];
+    const scanResult = scanText(textToScan, { brandsList: brands });
+    sendResponse({ result: scanResult, verdict: scanResult });
+    return false;
   }
 
   // Run benchmark inference (used by popup benchmark tab)

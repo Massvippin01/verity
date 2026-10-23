@@ -11,6 +11,9 @@
 import { getDomain } from '../shared/psl.js';
 import { isAllowlistedDomain } from '../shared/legit-domains.js';
 import { hasPiracyOrUnverifiedMediaPattern, hasMalvertisingPattern } from './rules.js';
+import { analyzeRedirectChainForensics } from '../shared/redirect-forensics.js';
+
+export { analyzeRedirectChainForensics };
 
 // In-memory cache for fast, synchronous access
 const redirectChains = new Map();
@@ -73,6 +76,7 @@ function saveChainToStorage(tabId, data) {
   const payload = {};
   payload[key] = {
     chain: data.chain ? data.chain.slice(-MAX_REDIRECTS) : [],
+    hops: data.hops ? data.hops.slice(-MAX_REDIRECTS) : [],
     hasShortener: !!data.hasShortener,
     loopDetected: !!data.loopDetected,
     terminated: !!data.terminated,
@@ -308,15 +312,20 @@ export function checkPopunderSpawn(tabId, currentUrl) {
 export function recordHop(tabId, url, isRedirect = false) {
   if (!tabId || !url || isInternalUrl(url)) return;
 
+  const now = Date.now();
   if (!redirectChains.has(tabId)) {
     redirectChains.set(tabId, { 
-      chain: [url], 
+      chain: [url],
+      hops: [{ url, timestamp: now, isTabHidden: false }],
       hasShortener: false,
       loopDetected: false,
       terminated: false
     });
   } else {
     const data = redirectChains.get(tabId);
+    if (!data.hops) {
+      data.hops = (data.chain || []).map((u, i) => ({ url: u, timestamp: now - (data.chain.length - i) * 100, isTabHidden: false }));
+    }
     if (!data.terminated) {
       // Avoid duplicate rapid fires for the same URL
       if (data.chain[data.chain.length - 1] !== url) {
@@ -327,6 +336,7 @@ export function recordHop(tabId, url, isRedirect = false) {
         }
         
         data.chain.push(url);
+        data.hops.push({ url, timestamp: now, isTabHidden: false });
         
         if (data.chain.length > MAX_REDIRECTS) {
           data.terminated = true;
@@ -387,6 +397,7 @@ export function isSuspiciousDomain(url) {
 function buildSignalsFromData(data) {
   if (!data) return null;
   const chain = data.chain || [];
+  const hops = data.hops || chain;
   const hasPopunder = !!data.popunderSpawn;
   if (chain.length <= 1 && !hasPopunder) return null;
   
@@ -438,6 +449,9 @@ function buildSignalsFromData(data) {
   
   const excessiveRedirects = redirectCount > 3;
 
+  // Run chain forensics
+  const chainForensics = analyzeRedirectChainForensics(hops.length > 0 ? hops : chain);
+
   const structuredReasons = [];
   if (hasPopunder) {
     structuredReasons.push({
@@ -465,6 +479,32 @@ function buildSignalsFromData(data) {
     });
   }
 
+  if (chainForensics.signals.includes('SIG_MALVERTISING_REDIRECT_CHAIN')) {
+    structuredReasons.push({
+      id: 'SIG_MALVERTISING_REDIRECT_CHAIN',
+      score: 80,
+      category: 'malvertising',
+      source: 'redirect',
+      params: {
+        hopCount: chain.length,
+        elapsedMs: chainForensics.elapsedMs
+      }
+    });
+  }
+
+  if (chainForensics.signals.includes('SIG_TAB_UNDER_HIJACK')) {
+    structuredReasons.push({
+      id: 'SIG_TAB_UNDER_HIJACK',
+      score: 85,
+      category: 'malvertising',
+      source: 'redirect',
+      params: {
+        sourceDomain: data.popunderSourceDomain || 'external',
+        targetDomain: data.popunderTargetDomain || ''
+      }
+    });
+  }
+
   return {
     analysisContext: "redirect",
     shortenerDetected: data.hasShortener,
@@ -479,6 +519,7 @@ function buildSignalsFromData(data) {
     chain: chain,
     popunderSpawn: hasPopunder,
     popunderDetected: hasPopunder,
+    chainForensics: chainForensics,
     structuredReasons: structuredReasons
   };
 }

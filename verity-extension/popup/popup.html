@@ -3,185 +3,73 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VERITY</title>
-  <link rel="stylesheet" href="../shared/ui/tokens.css">
-  <link rel="stylesheet" href="../shared/ui/components.css">
+  <title>Verity Shield</title>
   <link rel="stylesheet" href="popup.css">
 </head>
-<body class="v-scroll">
-
-  <!-- Header -->
-  <header class="p-header">
-    <div class="p-brand">
-      <svg class="p-logo" viewBox="0 0 128 128" width="22" height="22" aria-hidden="true">
-        <defs>
-          <linearGradient id="pShieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#10b981" />
-            <stop offset="100%" stop-color="#059669" />
-          </linearGradient>
-        </defs>
-        <path d="M64 12 L106 28 C106 72 88 104 64 116 C40 104 22 72 22 28 Z" fill="url(#pShieldGrad)" />
-        <path d="M44 64 L56 76 L85 46" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-      </svg>
-      <span class="p-title" id="txt-title">VERITY</span>
-    </div>
-
-    <div class="p-header-right">
-      <span class="v-badge v-badge-neutral p-status-pill" id="p-header-pill">Evaluating</span>
-
-      <!-- Theme Segmented Toggle -->
-      <div class="p-theme-toggle" role="radiogroup" aria-label="Theme">
-        <button type="button" class="p-theme-btn" data-theme-val="light" title="Light Theme" aria-label="Light Theme" id="btn-theme-light">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-        </button>
-        <button type="button" class="p-theme-btn" data-theme-val="system" title="System Theme" aria-label="System Theme" id="btn-theme-system">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
-        </button>
-        <button type="button" class="p-theme-btn" data-theme-val="dark" title="Dark Theme" aria-label="Dark Theme" id="btn-theme-dark">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-        </button>
+<body>
+  <div class="popup-container">
+    <header class="header">
+      <div class="brand">
+        <span class="status-dot dot-neutral" id="header-status-dot" aria-hidden="true"></span>
+        <span class="app-title">🛡️ Verity Shield</span>
       </div>
-    </div>
-  </header>
-
-  <!-- Main Container -->
-  <main class="p-main" id="p-main-content">
-
-    <!-- 1. Skeleton Loading State -->
-    <div class="p-state" id="state-loading">
-      <div class="v-card p-skeleton-card">
-        <div class="p-skeleton-row">
-          <div class="v-skeleton" style="width: 48px; height: 48px; border-radius: 9999px;"></div>
-          <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
-            <div class="v-skeleton" style="width: 60%; height: 18px;"></div>
-            <div class="v-skeleton" style="width: 85%; height: 14px;"></div>
-          </div>
-        </div>
-        <div class="v-separator"></div>
-        <div class="v-skeleton" style="width: 100%; height: 32px; border-radius: 6px;"></div>
-      </div>
-    </div>
-
-    <!-- 2. Unscannable Internal Page State -->
-    <div class="p-state hidden" id="state-unscannable">
-      <div class="v-card p-empty-card">
-        <div class="p-empty-icon" id="unscannable-icon"></div>
-        <h2 class="p-card-title" id="txt-unscannable-title">System or Internal Page</h2>
-        <p class="p-card-desc" id="txt-unscannable-desc">Browser internal pages and local system files are protected directly by your browser sandbox.</p>
-        <div class="v-chip-mono" id="unscannable-url-chip">chrome://</div>
-      </div>
-    </div>
-
-    <!-- 3. Error State (Service Worker unreachable) -->
-    <div class="p-state hidden" id="state-error">
-      <div class="v-alert v-alert-danger" style="margin-bottom: 12px;">
-        <div id="error-alert-icon"></div>
-        <div>
-          <div style="font-weight: 600;" id="txt-err-title">Service worker unreachable</div>
-          <div style="font-size: 12px; margin-top: 2px;" id="txt-err-desc">Could not connect to background protection service.</div>
-        </div>
-      </div>
-      <button type="button" class="v-btn v-btn-outline v-btn-md" id="btn-retry-sw" style="width: 100%;">
-        <span id="retry-icon"></span>
-        <span id="txt-retry">Retry connection</span>
-      </button>
-    </div>
-
-    <!-- 4. Active Verdict State -->
-    <div class="p-state hidden" id="state-verdict">
-
-      <!-- Hero Card -->
-      <section class="v-card p-hero-card" id="p-hero-card">
-        <div class="p-hero-top">
-          <div class="p-hero-left">
-            <div class="p-icon-circle" id="p-verdict-icon-circle">
-              <span id="p-verdict-icon"></span>
+      <nav class="lang-pills" role="tablist" aria-label="Select Language">
+        <button type="button" role="tab" class="lang-pill active" data-lang="en" aria-selected="true">EN</button>
+        <button type="button" role="tab" class="lang-pill" data-lang="ta" aria-selected="false">தமிழ்</button>
+        <button type="button" role="tab" class="lang-pill" data-lang="hi" aria-selected="false">हिं</button>
+        <button type="button" role="tab" class="lang-pill" data-lang="te" aria-selected="false">తె</button>
+      </nav>
+    </header>
+    <main class="main-content">
+      <section class="section-card">
+        <h2 class="section-label" id="label-current-site">Current Website</h2>
+        <div class="traffic-card card-safe" id="current-site-card" role="status" aria-live="polite">
+          <div class="traffic-header">
+            <span class="traffic-indicator" id="current-site-indicator" aria-hidden="true">🟢</span>
+            <div class="traffic-meta">
+              <div class="traffic-badge" id="current-site-status">SAFE WEBSITE</div>
+              <div class="traffic-domain" id="current-site-domain">loading...</div>
             </div>
-            <div>
-              <h2 class="p-verdict-headline" id="p-verdict-text">Safe to browse</h2>
-              <div class="p-domain-wrap">
-                <div class="v-chip-mono" id="p-domain-chip" title="Active domain">
-                  <span class="v-chip-mono-muted" id="p-domain-sub"></span><span class="v-chip-mono-emphasis" id="p-domain-reg">loading...</span>
-                </div>
-              </div>
-            </div>
+            <div class="traffic-score" id="current-site-score" aria-label="Risk score">0/100</div>
           </div>
-
-          <!-- Score Ring Gauge -->
-          <div class="p-gauge-wrap" title="Risk Score">
-            <svg class="p-gauge-svg" width="56" height="56" viewBox="0 0 56 56">
-              <circle class="p-gauge-bg" cx="28" cy="28" r="23" stroke-width="5" />
-              <circle class="p-gauge-meter" id="p-gauge-meter" cx="28" cy="28" r="23" stroke-width="5" />
-            </svg>
-            <div class="p-gauge-center">
-              <span class="p-gauge-num" id="p-gauge-num">0</span>
-              <span class="p-gauge-max">/100</span>
-            </div>
-          </div>
+          <ul class="reasons-list hidden" id="current-site-reasons"></ul>
         </div>
       </section>
-
-      <!-- "Why" Accordion Section -->
-      <section class="p-accordion-section" id="p-why-section">
-        <button type="button" class="v-accordion-trigger p-accordion-header" id="btn-why-accordion" aria-expanded="false" aria-controls="p-reasons-container">
-          <span class="p-why-title-wrap">
-            <span id="why-icon"></span>
-            <span id="txt-why-title">Why we flagged this</span>
-            <span class="v-badge v-badge-neutral p-reasons-count" id="p-reasons-badge">0</span>
-          </span>
-          <svg class="v-accordion-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-        </button>
-
-        <div class="v-accordion-content" id="p-reasons-container" hidden>
-          <div class="v-scroll p-reasons-list" id="p-reasons-list">
-            <!-- Dynamically populated reason rows -->
+      <section class="section-card">
+        <h2 class="section-label" id="label-quick-checker">Quick WhatsApp / Link Checker</h2>
+        <div class="checker-input-wrap">
+          <textarea id="checker-input" class="checker-textarea" rows="3" maxlength="5000" placeholder="Paste suspicious WhatsApp link, SMS, or message here..."></textarea>
+          <div class="checker-footer">
+            <span class="char-count" id="char-count">0/5000</span>
+            <button type="button" id="btn-check" class="btn-check">Check Link / Text</button>
           </div>
         </div>
-      </section>
-
-      <!-- Quick Actions -->
-      <section class="p-actions-row">
-        <button type="button" class="v-btn v-btn-outline v-btn-sm" id="btn-copy-domain" title="Copy domain to clipboard">
-          <span id="icon-copy"></span>
-          <span id="txt-copy">Copy domain</span>
-        </button>
-        <button type="button" class="v-btn v-btn-outline v-btn-sm" id="btn-site-safe" title="Allow this site permanently">
-          <span id="icon-check"></span>
-          <span id="txt-site-safe">This site is safe</span>
-        </button>
-        <button type="button" class="v-btn v-btn-ghost v-btn-icon" id="btn-open-settings" title="Open Settings" aria-label="Settings">
-          <span id="icon-settings"></span>
-        </button>
-      </section>
-
-      <!-- Confirmation Overlay for Danger Verdict Override -->
-      <div class="p-confirm-box hidden" id="p-confirm-box">
-        <div class="p-confirm-title" id="txt-confirm-title">Confirm Trust</div>
-        <p class="p-confirm-desc" id="txt-confirm-desc">Are you sure you want to trust this domain? Protections will be bypassed.</p>
-        <div class="p-confirm-actions">
-          <button type="button" class="v-btn v-btn-outline v-btn-sm" id="btn-cancel-trust">Cancel</button>
-          <button type="button" class="v-btn v-btn-destructive v-btn-sm" id="btn-proceed-trust">Yes, trust site</button>
+        <div class="traffic-card hidden" id="scan-result-card" role="status" aria-live="polite">
+          <div class="traffic-header">
+            <span class="traffic-indicator" id="scan-indicator" aria-hidden="true">🟢</span>
+            <div class="traffic-meta">
+              <div class="traffic-badge" id="scan-status">SAFE</div>
+              <div class="traffic-score-sub" id="scan-score-sub">Score: 0/100</div>
+            </div>
+          </div>
+          <ul class="reasons-list hidden" id="scan-reasons"></ul>
+          <details class="why-details hidden" id="scan-why-details">
+            <summary class="why-summary" id="scan-why-summary">How did we catch this?</summary>
+            <div class="why-body" id="scan-why-body"></div>
+          </details>
         </div>
-      </div>
-
-    </div>
-
-  </main>
-
-  <!-- Footer -->
-  <footer class="p-footer">
-    <label class="p-protection-toggle" for="switch-protection" title="Toggle Real-Time Protection">
-      <span class="v-switch">
-        <input type="checkbox" id="switch-protection" checked>
-        <span class="v-switch-track"><span class="v-switch-thumb"></span></span>
-      </span>
-      <span class="p-footer-label" id="txt-protection-label">Real-time Protection</span>
-    </label>
-    <span class="p-version-string" id="txt-version">v2.0.0 · On-device ML</span>
-  </footer>
-
-  <script src="../shared/messages.en.js"></script>
-  <script src="../shared/ui/icons.js"></script>
-  <script src="popup.js"></script>
+      </section>
+      <section class="golden-box" id="golden-box">
+        <div class="golden-title" id="golden-title">Golden Safety Rule</div>
+        <p class="golden-text" id="golden-text"></p>
+      </section>
+    </main>
+    <footer class="footer">
+      <div class="privacy-note" id="privacy-note">Everything is checked on your device. Nothing is uploaded.</div>
+      <button type="button" class="btn-advanced" id="btn-toggle-advanced" aria-expanded="false" aria-controls="advanced-pre">Advanced Details</button>
+      <pre class="advanced-pre hidden" id="advanced-pre" tabindex="0"></pre>
+    </footer>
+  </div>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

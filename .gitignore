@@ -61,6 +61,7 @@ ENV/
 
 # ML Models and Data
 *.onnx
+!verity-extension/background/model/phishing_model_v2.onnx
 *.pkl
 *.pt
 *.h5

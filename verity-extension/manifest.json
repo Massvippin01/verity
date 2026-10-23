@@ -77,20 +77,33 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "shared/*",
-        "shared/theme.css",
-        "shared/ui/*",
-        "shared/fonts/*",
-        "content/overlay.css",
-        "payment-brands.json",
-        "config/*",
-        "content/search/*",
-        "content/search/engines/*",
-        "content/main-world-interceptor.js",
-        "content/bharat-scam-detectors.js",
-        "ui/*"
+        "shared/fonts/InterVariable.woff2",
+        "ui/blocked.html"
       ],
       "matches": ["<all_urls>"]
+    },
+    {
+      "resources": [
+        "content/search/search-manager.js",
+        "content/search/ui.js",
+        "content/search/engines/google.js",
+        "content/search/engines/bing.js",
+        "content/search/engines/duckduckgo.js",
+        "shared/ui/icons.js",
+        "shared/messages.js",
+        "shared/messages.en.js",
+        "shared/psl.js"
+      ],
+      "matches": [
+        "*://www.google.com/*",
+        "*://*.google.com/*",
+        "*://www.bing.com/*",
+        "*://*.bing.com/*",
+        "*://duckduckgo.com/*",
+        "*://*.duckduckgo.com/*",
+        "*://localhost/*",
+        "*://127.0.0.1/*"
+      ]
     }
   ]
 }

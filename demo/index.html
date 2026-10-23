@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verity 2.0 (Bharat Shield) — Judge Demo Launcher</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #030712;
+      --card-bg: rgba(15, 23, 42, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover: rgba(30, 41, 59, 0.85);
+      --accent-blue: #38bdf8;
+      --accent-indigo: #818cf8;
+      --accent-purple: #c084fc;
+      --danger-red: #ef4444;
+      --warning-amber: #f59e0b;
+      --success-green: #22c55e;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: radial-gradient(circle at 50% 0%, #0f172a 0%, #030712 70%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 30px 20px 60px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Simulation Warning Banner */
+    .sim-banner {
+      width: 100%;
+      max-width: 1200px;
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(239, 68, 68, 0.15));
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      border-radius: 12px;
+      padding: 14px 20px;
+      margin-bottom: 30px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 4px 20px rgba(245, 158, 11, 0.1);
+    }
+
+    .sim-banner .icon {
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .sim-banner .text {
+      font-size: 0.95rem;
+      color: #fef3c7;
+      line-height: 1.45;
+    }
+
+    .sim-banner .text strong {
+      color: #fbbf24;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Header */
+    .header {
+      max-width: 1200px;
+      width: 100%;
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 16px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 999px;
+      font-size: 0.82rem;
+      color: var(--accent-blue);
+      font-weight: 600;
+      margin-bottom: 14px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      font-size: 2.8rem;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 12px;
+      line-height: 1.15;
+    }
+
+    h1 span {
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-indigo), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    p.sub {
+      color: var(--text-muted);
+      font-size: 1.12rem;
+      max-width: 820px;
+      margin: 0 auto 24px auto;
+      line-height: 1.6;
+      font-weight: 300;
+    }
+
+    /* Key Metrics */
+    .metrics-bar {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 36px;
+    }
+
+    .metric-pill {
+      background: rgba(17, 24, 39, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 10px 22px;
+      text-align: center;
+      backdrop-filter: blur(8px);
+    }
+
+    .metric-val {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--accent-blue);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .metric-lbl {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      margin-top: 2px;
+    }
+
+    /* Main Showcase Section */
+    .section-title {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin: 20px 0 18px 0;
+      width: 100%;
+      max-width: 1200px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .section-badge {
+      font-size: 0.75rem;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      padding: 4px 10px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .primary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 22px;
+      width: 100%;
+      max-width: 1200px;
+      margin-bottom: 48px;
+    }
+
+    .primary-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 26px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .primary-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-indigo));
+      opacity: 0.7;
+    }
+
+    .primary-card.c1::before { background: linear-gradient(90deg, #38bdf8, #2563eb); }
+    .primary-card.c2::before { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+    .primary-card.c3::before { background: linear-gradient(90deg, #ef4444, #dc2626); }
+    .primary-card.c4::before { background: linear-gradient(90deg, #818cf8, #a855f7); }
+
+    .primary-card:hover {
+      transform: translateY(-5px);
+      background: var(--card-hover);
+      border-color: rgba(56, 189, 248, 0.35);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+    }
+
+    .card-seq {
+      display: inline-block;
+      width: 28px;
+      height: 28px;
+      line-height: 28px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      font-weight: 700;
+      text-align: center;
+      font-size: 0.85rem;
+      margin-bottom: 8px;
+    }
+
+    .card-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1.3;
+    }
+
+    .card-threat {
+      font-size: 0.88rem;
+      color: #cbd5e1;
+      line-height: 1.55;
+      font-weight: 300;
+      flex-grow: 1;
+    }
+
+    .defense-box {
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 0.82rem;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+
+    .defense-box strong {
+      color: #38bdf8;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .btn-launch {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 18px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    }
+
+    .btn-launch:hover {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+    }
+
+    .btn-launch.btn-c2 {
+      background: linear-gradient(135deg, #d97706, #b45309);
+      box-shadow: 0 4px 12px rgba(217, 119, 6, 0.25);
+    }
+    .btn-launch.btn-c2:hover {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      box-shadow: 0 6px 20px rgba(217, 119, 6, 0.4);
+    }
+
+    .btn-launch.btn-c3 {
+      background: linear-gradient(135deg, #dc2626, #b91c1c);
+      box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+    }
+    .btn-launch.btn-c3:hover {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      box-shadow: 0 6px 20px rgba(220, 38, 38, 0.4);
+    }
+
+    .btn-launch.btn-c4 {
+      background: linear-gradient(135deg, #7c3aed, #6d28d9);
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.25);
+    }
+    .btn-launch.btn-c4:hover {
+      background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+      box-shadow: 0 6px 20px rgba(124, 58, 237, 0.4);
+    }
+
+    /* Secondary Scenarios */
+    .secondary-section {
+      width: 100%;
+      max-width: 1200px;
+      margin-top: 20px;
+    }
+
+    .secondary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .secondary-card {
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .secondary-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+
+    .secondary-desc {
+      font-size: 0.82rem;
+      color: #94a3b8;
+      line-height: 1.45;
+      flex-grow: 1;
+    }
+
+    .secondary-btn {
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      color: #cbd5e1;
+      text-align: center;
+      text-decoration: none;
+      font-size: 0.82rem;
+      font-weight: 500;
+      transition: 0.2s;
+    }
+
+    .secondary-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+
+    footer {
+      margin-top: 60px;
+      text-align: center;
+      color: #64748b;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Mandatory Simulation Warning Banner -->
+  <div class="sim-banner" role="alert">
+    <div class="icon">⚠️</div>
+    <div class="text">
+      <strong>These are simulations:</strong> All pages served by this launcher are controlled, defanged test environments designed solely for hackathon evaluation and security demonstration. No real victim data, credentials, or funds are collected or processed.
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="badge-pill">🛡️ Verity 2.0 (Bharat Shield) &bull; Grand Jury Demo</div>
+    <h1>Judge Demo <span>Launcher</span></h1>
+    <p class="sub">
+      Experience 100% on-device, zero-telemetry defense against India's most aggressive cyber fraud threats. Run each scenario in sequence to see real-time detection, in-flight APK pausing, and citizen-first explanations in action.
+    </p>
+
+    <div class="metrics-bar">
+      <div class="metric-pill">
+        <div class="metric-val">&lt; 1.8ms</div>
+        <div class="metric-lbl">Average Scan Latency</div>
+      </div>
+      <div class="metric-pill">
+        <div class="metric-val">100%</div>
+        <div class="metric-lbl">On-Device Privacy</div>
+      </div>
+      <div class="metric-pill">
+        <div class="metric-val">0.00%</div>
+        <div class="metric-lbl">False Positives (Top 1K)</div>
+      </div>
+      <div class="metric-pill">
+        <div class="metric-val">30 / 30</div>
+        <div class="metric-lbl">Bharat Dataset Pass</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 4 PRIMARY SCENARIOS IN SPECIFIED ORDER -->
+  <div class="section-title">
+    <span>🎯 Core Hackathon Scenarios (3-Minute Judging Flow)</span>
+    <span class="section-badge">Priority 1 to 4</span>
+  </div>
+
+  <main class="primary-grid">
+
+    <!-- Scenario 1: Fake SBI KYC + Telegram Exfiltration -->
+    <article class="primary-card c1">
+      <div class="card-seq">1</div>
+      <h2 class="card-title">Fake SBI KYC + Telegram Webhook Exfiltration</h2>
+      <p class="card-threat">
+        Simulates an urgent SMS phishing lure ("SBI NetBanking suspended; update PAN/Aadhaar"). Page mimics official State Bank of India login and actively exfiltrates submitted credentials to a rogue Telegram Bot webhook.
+      </p>
+      <div class="defense-box">
+        <strong>🛡️ Verity Shield Defense:</strong>
+        Immediate full-page Red Block Shield. Blocks rogue Telegram webhook request, cuts network exfiltration instantly, and explains the attack in plain citizen language.
+      </div>
+      <a class="btn-launch" href="/demo/sbi-kyc-telegram" target="_blank" id="launch-sbi">
+        🚀 Launch Scenario 1: Fake SBI KYC
+      </a>
+    </article>
+
+    <!-- Scenario 2: OLX UPI Collect Trap -->
+    <article class="primary-card c2">
+      <div class="card-seq">2</div>
+      <h2 class="card-title">OLX UPI Collect Trap (Reverse-Charge Scam)</h2>
+      <p class="card-threat">
+        Simulates a marketplace scam where an "OLX buyer" promises to pay ₹15,000 for your listing. Victim is instructed to click an "Accept Payment" link or scan a QR code embedding a deceptive <code>upi://pay</code> collect request.
+      </p>
+      <div class="defense-box">
+        <strong>🛡️ Verity Shield Defense:</strong>
+        Detects <code>am=15000</code> paired with receive lures. Displays interactive warning card: <em>"Never enter your UPI PIN to receive money."</em>
+      </div>
+      <a class="btn-launch btn-c2" href="/demo/olx-upi" target="_blank" id="launch-upi">
+        🚀 Launch Scenario 2: OLX UPI Trap
+      </a>
+    </article>
+
+    <!-- Scenario 3: CBI Digital Arrest Extortion -->
+    <article class="primary-card c3">
+      <div class="card-seq">3</div>
+      <h2 class="card-title">CBI Digital Arrest Video Call Extortion</h2>
+      <p class="card-threat">
+        Simulates high-pressure extortion impersonating the Central Bureau of Investigation & Customs. Claims an illegal narcotics parcel was seized in victim's name, threatens virtual arrest warrant, and demands an immediate Skype call.
+      </p>
+      <div class="defense-box">
+        <strong>🛡️ Verity Shield Defense:</strong>
+        Triggers instant red block (<code>SIG_DIGITAL_ARREST_EXTORTION</code>). Advises citizen: <em>"Real law enforcement never conducts virtual arrests or demands money over video calls."</em>
+      </div>
+      <a class="btn-launch btn-c3" href="/demo/cbi-digital-arrest" target="_blank" id="launch-cbi">
+        🚀 Launch Scenario 3: CBI Digital Arrest
+      </a>
+    </article>
+
+    <!-- Scenario 4: RTO_Challan.apk Malicious Dropper -->
+    <article class="primary-card c4">
+      <div class="card-seq">4</div>
+      <h2 class="card-title">RTO_Challan.apk Malicious Dropper</h2>
+      <p class="card-threat">
+        Simulates a fraudulent Parivahan traffic fine portal requiring citizens to download <code>RTO_Challan.apk</code> to view photo proof. The stream delivers spyware that intercepts SMS OTPs and contacts.
+      </p>
+      <div class="defense-box">
+        <strong>🛡️ Verity Shield Defense:</strong>
+        Verity Download Protection pauses the incoming APK stream in-flight, evaluates package risk, and empowers user with 1-click safe cancellation before file lands on disk.
+      </div>
+      <a class="btn-launch btn-c4" href="/demo/rto-apk" target="_blank" id="launch-rto">
+        🚀 Launch Scenario 4: RTO Challan APK
+      </a>
+    </article>
+
+  </main>
+
+  <!-- SECONDARY ENTERPRISE & ZERO-DAY DEMOS -->
+  <section class="secondary-section">
+    <div class="section-title">
+      <span>⚡ Additional Enterprise & Zero-Day Scenarios</span>
+      <span class="section-badge">10 Supporting Demos</span>
+    </div>
+
+    <div class="secondary-grid">
+      <div class="secondary-card">
+        <div class="secondary-title">🪟 BitB Fake Window Attack</div>
+        <div class="secondary-desc">In-DOM simulated Google OAuth pop-up with fake padlock and fake URL address bar.</div>
+        <a class="secondary-btn" href="/demo/bitb" target="_blank">Launch BitB</a>
+      </div>
+
+      <div class="secondary-card">
+        <div class="secondary-title">🔄 AiTM Reverse Proxy</div>
+        <div class="secondary-desc">Evilginx3 adversary-in-the-middle harvesting real-time Microsoft session tokens.</div>
+        <a class="secondary-btn" href="/demo/aitm" target="_blank">Launch AiTM</a>
+      </div>
+
+      <div class="secondary-card">
+        <div class="secondary-title">🖼️ MurmurHash3 Favicon Spoof</div>
+        <div class="secondary-desc">Zero-day phishing kit cloning Microsoft/PayPal favicons on disposable domains.</div>
+        <a class="secondary-btn" href="/demo/favicon-spoof" target="_blank">Launch Favicon Spoof</a>
+      </div>
+
+      <div class="secondary-card">
+        <div class="secondary-title">☁️ Free Cloud Hosting Phishing</div>
+        <div class="secondary-desc">Banking credential trap hosted on multi-tenant static cloud (pages.dev, web.app).</div>
+        <a class="secondary-btn" href="/demo/free-hosting-trap" target="_blank">Launch Free Hosting Trap</a>
+      </div>
+
+      <div class="secondary-card">
+        <div class="secondary-title">🎬 Pop-Up & Rotator Defusal</div>
+        <div class="secondary-desc">Defuses malicious unsolicited window.open ad rotators before navigation begins.</div>
+        <a class="secondary-btn" href="/demo/popup-test" target="_blank">Launch Pop-up Test</a>
+      </div>
+
+      <div class="secondary-card">
+        <div class="secondary-title">🔍 Google Search Result Shields</div>
+        <div class="secondary-desc">Dynamic in-page green/red shield badges rendered beside search results.</div>
+        <a class="secondary-btn" href="/demo/google-search" target="_blank">Launch Search Badges</a>
+      </div>
+
+      <div class="secondary-card">
+        <div class="secondary-title">🛡️ Anti-Analysis Evasion</div>
+        <div class="secondary-desc">Phishing kit disabling right-click and DevTools keys (F12, Ctrl+Shift+I).</div>
+        <a class="secondary-btn" href="/demo/anti-analysis-evasion" target="_blank">Launch Anti-Evasion</a>
+      </div>
+
+      <div class="secondary-card">
+        <div class="secondary-title">📲 Quishing QR Code Fine</div>
+        <div class="secondary-desc">Traffic challan phishing page embedding malicious QR debit code.</div>
+        <a class="secondary-btn" href="/demo/quishing" target="_blank">Launch Quishing Demo</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Verity 2.0 (Bharat Shield) &bull; Built for National Cyber Security & Safety Hackathon &bull; 100% On-Device Zero-Trust
+  </footer>
+
+</body>
+</html>

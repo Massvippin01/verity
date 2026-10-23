@@ -1,0 +1,272 @@
+[
+  {
+    "id": "sbi-kyc-typosquat",
+    "category": "banking_kyc_typosquat",
+    "input": "https://sbi-kyc-verification-portal.invalid/update-pan",
+    "inputType": "url",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_KYC_CYBER_FRAUD"],
+    "notes": "SBI brand name impersonation on synthetic .invalid domain with urgent PAN update path"
+  },
+  {
+    "id": "hdfc-netbanking-kyc",
+    "category": "banking_kyc_typosquat",
+    "input": "https://hdfc-netbanking-kyc-alert.invalid/login",
+    "inputType": "url",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_KYC_CYBER_FRAUD"],
+    "notes": "HDFC netbanking brand lure with urgency keyword on .invalid domain"
+  },
+  {
+    "id": "icici-kyc-reward",
+    "category": "banking_kyc_typosquat",
+    "input": "https://icici-banking-kyc-reward.invalid/verify",
+    "inputType": "url",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_KYC_CYBER_FRAUD"],
+    "notes": "ICICI brand lure combined with KYC verification on synthetic domain"
+  },
+  {
+    "id": "axis-bank-kyc",
+    "category": "banking_kyc_typosquat",
+    "input": "https://axis-bank-kyc-update-alert.invalid/security",
+    "inputType": "url",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_KYC_CYBER_FRAUD"],
+    "notes": "Axis bank urgent KYC suspension warning on untrusted .invalid host"
+  },
+  {
+    "id": "indiapost-kyc-delivery",
+    "category": "banking_kyc_typosquat",
+    "input": "https://indiapost-kyc-delivery-update.invalid/track",
+    "inputType": "url",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_KYC_CYBER_FRAUD"],
+    "notes": "India Post parcel delivery failure lure requiring KYC card verification"
+  },
+  {
+    "id": "digilocker-aadhaar-kyc",
+    "category": "banking_kyc_typosquat",
+    "input": "https://digilocker-aadhaar-kyc-verify.invalid/doc",
+    "inputType": "url",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_KYC_CYBER_FRAUD"],
+    "notes": "DigiLocker document impersonation soliciting Aadhaar biometric and OTP verification"
+  },
+  {
+    "id": "upi-olx-buyer-trap",
+    "category": "upi_collect_trap",
+    "input": "upi://pay?pa=olx_buyer_trap@okhdfcbank.invalid&pn=OLXBuyer&am=15000&cu=INR&tn=OLX+Payment+Accept",
+    "inputType": "upi",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_UPI_QR_COLLECT_TRAP"],
+    "notes": "Deceptive collect request where scammer poses as buyer and sends debit intent with am=15000 claiming seller will receive money"
+  },
+  {
+    "id": "upi-paytm-cashback-trap",
+    "category": "upi_collect_trap",
+    "input": "upi://pay?pa=cashback_reward@fakeupi.invalid&pn=PaytmReward&am=4999&cu=INR&tn=Claim+Cashback+Reward",
+    "inputType": "upi",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_UPI_QR_COLLECT_TRAP"],
+    "notes": "Cashback reward claim link with am=4999 parameter that debits victim account instead of crediting"
+  },
+  {
+    "id": "upi-irctc-refund-trap",
+    "category": "upi_collect_trap",
+    "input": "upi://pay?pa=support_refund@fakeupi.invalid&pn=IRCTCRefund&am=1200&cu=INR&tn=Receive+Ticket+Refund",
+    "inputType": "upi",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_UPI_QR_COLLECT_TRAP"],
+    "notes": "Fake customer care refund URI promising ticket refund of Rs 1200 via collect transaction"
+  },
+  {
+    "id": "upi-advance-payment-lure",
+    "category": "upi_collect_trap",
+    "input": "upi://pay?pa=advance_credit@fakeupi.invalid&pn=BuyerAdvance&am=8500&cu=INR&tn=Accept+Advance+Money",
+    "inputType": "upi",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_UPI_QR_COLLECT_TRAP"],
+    "notes": "Fraudulent advance money acceptance link configured with collect amount am=8500"
+  },
+  {
+    "id": "upi-lottery-bonus-trap",
+    "category": "upi_collect_trap",
+    "input": "upi://pay?pa=prize_bonus@fakeupi.invalid&pn=BonusClaim&am=25000&cu=INR&tn=Congratulations+Claim+Prize",
+    "inputType": "upi",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_UPI_QR_COLLECT_TRAP"],
+    "notes": "Lottery winner congratulatory lure directing user to approve debit of Rs 25,000"
+  },
+  {
+    "id": "digital-arrest-cbi-en",
+    "category": "digital_arrest",
+    "input": "URGENT NOTICE: CBI cyber crime investigation. You are placed under digital arrest for illegal narcotics parcel seized at airport. Connect to video call immediately on Skype or arrest warrant will be executed.",
+    "inputType": "text",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_DIGITAL_ARREST_EXTORTION"],
+    "notes": "CBI law enforcement impersonation demanding live Skype video call under threat of immediate arrest warrant"
+  },
+  {
+    "id": "digital-arrest-customs-en",
+    "category": "digital_arrest",
+    "input": "Customs Seizure Warrant: Illegal contraband parcel seized in your name under customs seizure warrant. Virtual arrest warrant issued. Connect to video call immediately to transfer money to verify innocence.",
+    "inputType": "text",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_DIGITAL_ARREST_EXTORTION"],
+    "notes": "Customs department parcel seizure notice demanding financial transfer to verify innocence"
+  },
+  {
+    "id": "digital-arrest-trai-en",
+    "category": "digital_arrest",
+    "input": "TRAI mobile disconnection notice: Mobile number will be blocked within 2 hours. MHA Cyber Cell digital arrest order active. Transfer clearance fee immediately to avoid arrest.",
+    "inputType": "text",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_DIGITAL_ARREST_EXTORTION"],
+    "notes": "TRAI mobile disconnection alert coupled with MHA Cyber Cell digital arrest extortion"
+  },
+  {
+    "id": "digital-arrest-police-en",
+    "category": "digital_arrest",
+    "input": "Delhi Police Crime Branch & Cyber Crime Cell notice: Bank account involved in money laundering investigation. You are under digital arrest. Stay on call and transfer bail amount to RBI verification account.",
+    "inputType": "text",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_DIGITAL_ARREST_EXTORTION"],
+    "notes": "Police crime branch extortion instructing victim to stay on call and wire bail funds to RBI verification account"
+  },
+  {
+    "id": "digital-arrest-cbi-hi",
+    "category": "digital_arrest",
+    "input": "सीबीआई साइबर सेल नोटिस: आपके आधार से मनी लॉन्ड्रिंग और अवैध पार्सल का मामला दर्ज हुआ है। आप डिजिटल अरेस्ट के तहत हैं। गिरफ्तारी वारंट जारी कर दिया गया है। तुरंत वीडियो कॉल पर आएं और पूछताछ के लिए जुर्माना भरें।",
+    "inputType": "text",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_DIGITAL_ARREST_EXTORTION"],
+    "notes": "Hindi CBI cyber crime digital arrest notice citing money laundering and demanding video appearance"
+  },
+  {
+    "id": "digital-arrest-customs-hi",
+    "category": "digital_arrest",
+    "input": "कस्टम जब्ती वारंट: मुंबई एयरपोर्ट पर आपके नाम से अवैध पार्सल जब्त। दिल्ली पुलिस क्राइम ब्रांच डिजिटल अरेस्ट आदेश। तुरंत वीडियो कॉल से जुड़ें और आरबीआई सुरक्षित खाते में पैसे ट्रांसफर करें।",
+    "inputType": "text",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_DIGITAL_ARREST_EXTORTION"],
+    "notes": "Hindi customs seizure notice threatening digital arrest and demanding fund transfer to RBI safe account"
+  },
+  {
+    "id": "digital-arrest-cbi-ta",
+    "category": "digital_arrest",
+    "input": "சிபிஐ சைபர் கிரைம் எச்சரிக்கை: உங்கள் ஆதார் எண் மூலம் சட்டவிரோத பணப்பரிமாற்றம் நடந்துள்ளது. நீங்கள் டிஜிட்டல் கைது செய்யப்பட்டுள்ளீர்கள். கைது வாரண்ட் பிறப்பிக்கப்பட்டுள்ளது. உடனடியாக வீடியோ அழைப்பு மூலம் ஆஜராகி அபராதம் செலுத்துங்கள்.",
+    "inputType": "text",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_DIGITAL_ARREST_EXTORTION"],
+    "notes": "Tamil CBI cyber crime notice threatening digital arrest warrant and demanding fine payment via video call"
+  },
+  {
+    "id": "apk-rto-challan",
+    "category": "apk_dropper",
+    "input": "https://echallan-parivahan-traffic.invalid/download/RTO_Challan.apk",
+    "inputType": "url",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_MALICIOUS_APK_DROPPER"],
+    "notes": "Fake Parivahan transport department portal distributing surveillance spyware via RTO_Challan.apk"
+  },
+  {
+    "id": "apk-pm-kisan-yojana",
+    "category": "apk_dropper",
+    "input": "https://pmkisan-yojana-subsidy.invalid/get/PM_Kisan_Yojana.apk",
+    "inputType": "url",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_MALICIOUS_APK_DROPPER"],
+    "notes": "Government farmer subsidy lure downloading Trojan banker APK PM_Kisan_Yojana.apk"
+  },
+  {
+    "id": "apk-bescom-bill",
+    "category": "apk_dropper",
+    "input": "https://bescom-electricity-bill-pay.invalid/app/BESCOM_Bill.apk",
+    "inputType": "url",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_MALICIOUS_APK_DROPPER"],
+    "notes": "Urgent electricity disconnection scam directing user to download malicious BESCOM_Bill.apk"
+  },
+  {
+    "id": "apk-wedding-card",
+    "category": "apk_dropper",
+    "input": "Dear family and friends, wedding ceremony invitation card attached: Wedding_Card.apk. Install to view photos and event location.",
+    "inputType": "text",
+    "expectedVerdict": "danger",
+    "expectedSignals": ["SIG_MALICIOUS_APK_DROPPER"],
+    "notes": "Social engineering SMS/WhatsApp lure tricking victims to install SMS-forwarding malware Wedding_Card.apk"
+  },
+  {
+    "id": "legit-sbi-portal",
+    "category": "legitimate_portal",
+    "input": "https://onlinesbi.sbi",
+    "inputType": "url",
+    "expectedVerdict": "safe",
+    "expectedSignals": [],
+    "notes": "Official verified domain for State Bank of India online banking"
+  },
+  {
+    "id": "legit-irctc-portal",
+    "category": "legitimate_portal",
+    "input": "https://www.irctc.co.in",
+    "inputType": "url",
+    "expectedVerdict": "safe",
+    "expectedSignals": [],
+    "notes": "Official Indian Railways ticket booking portal"
+  },
+  {
+    "id": "legit-digilocker-portal",
+    "category": "legitimate_portal",
+    "input": "https://digilocker.gov.in",
+    "inputType": "url",
+    "expectedVerdict": "safe",
+    "expectedSignals": [],
+    "notes": "Official Government of India cloud document locker"
+  },
+  {
+    "id": "legit-incometax-portal",
+    "category": "legitimate_portal",
+    "input": "https://incometax.gov.in",
+    "inputType": "url",
+    "expectedVerdict": "safe",
+    "expectedSignals": [],
+    "notes": "Official Ministry of Finance income tax filing portal"
+  },
+  {
+    "id": "legit-hdfc-portal",
+    "category": "legitimate_portal",
+    "input": "https://www.hdfcbank.com",
+    "inputType": "url",
+    "expectedVerdict": "safe",
+    "expectedSignals": [],
+    "notes": "Official corporate banking domain for HDFC Bank Limited"
+  },
+  {
+    "id": "legit-icici-portal",
+    "category": "legitimate_portal",
+    "input": "https://www.icicibank.com",
+    "inputType": "url",
+    "expectedVerdict": "safe",
+    "expectedSignals": [],
+    "notes": "Official corporate banking domain for ICICI Bank"
+  },
+  {
+    "id": "legit-google-accounts",
+    "category": "legitimate_portal",
+    "input": "https://accounts.google.com",
+    "inputType": "url",
+    "expectedVerdict": "safe",
+    "expectedSignals": [],
+    "notes": "Official Google Identity and OAuth authentication service"
+  },
+  {
+    "id": "legit-microsoft-login",
+    "category": "legitimate_portal",
+    "input": "https://login.microsoftonline.com",
+    "inputType": "url",
+    "expectedVerdict": "safe",
+    "expectedSignals": [],
+    "notes": "Official Microsoft 365 and Entra ID authentication service"
+  }
+]

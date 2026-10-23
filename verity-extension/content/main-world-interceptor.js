@@ -49,6 +49,84 @@
     return EXFIL_REGEX.test(url);
   }
 
+  // ── Step 0.05: Wrap WebSocket Constructor ──────────────────────────────────
+  function wrapWebSocket(ctx) {
+    if (!ctx || typeof ctx.WebSocket !== 'function' || ctx.WebSocket.__verityWrapped) return;
+
+    const OrigWebSocket = ctx.WebSocket;
+
+    const WrappedWebSocket = function (url, protocols) {
+      if (!(this instanceof WrappedWebSocket)) {
+        throw new TypeError("Failed to construct 'WebSocket': Please use the 'new' operator");
+      }
+
+      const targetUrl = typeof url === 'string' ? url : (url ? String(url) : '');
+      if (isExfilEndpoint(targetUrl)) {
+        notifyThreat('SIG_PHISHING_KIT_WEBHOOK_EXFIL', { endpoint: targetUrl });
+        const err = typeof DOMException !== 'undefined'
+          ? new DOMException('Blocked by Verity Security Shield: Phishing exfiltration endpoint', 'SecurityError')
+          : new Error('Blocked by Verity Security Shield: Phishing exfiltration endpoint');
+        throw err;
+      }
+
+      return arguments.length > 1
+        ? new OrigWebSocket(url, protocols)
+        : new OrigWebSocket(url);
+    };
+
+    // Preserve prototype chain
+    WrappedWebSocket.prototype = OrigWebSocket.prototype;
+    try {
+      Object.setPrototypeOf(WrappedWebSocket, OrigWebSocket);
+    } catch (_) {}
+
+    // Preserve standard static constants
+    WrappedWebSocket.CONNECTING = OrigWebSocket.CONNECTING !== undefined ? OrigWebSocket.CONNECTING : 0;
+    WrappedWebSocket.OPEN = OrigWebSocket.OPEN !== undefined ? OrigWebSocket.OPEN : 1;
+    WrappedWebSocket.CLOSING = OrigWebSocket.CLOSING !== undefined ? OrigWebSocket.CLOSING : 2;
+    WrappedWebSocket.CLOSED = OrigWebSocket.CLOSED !== undefined ? OrigWebSocket.CLOSED : 3;
+
+    // Preserve any additional static properties
+    try {
+      const descriptors = Object.getOwnPropertyDescriptors(OrigWebSocket);
+      for (const prop of Object.keys(descriptors)) {
+        if (!['prototype', 'name', 'length'].includes(prop)) {
+          try {
+            Object.defineProperty(WrappedWebSocket, prop, descriptors[prop]);
+          } catch (_) {
+            WrappedWebSocket[prop] = OrigWebSocket[prop];
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Preserve instanceof checks
+    try {
+      Object.defineProperty(WrappedWebSocket, Symbol.hasInstance, {
+        value: function (instance) {
+          return instance instanceof OrigWebSocket;
+        },
+        configurable: true
+      });
+    } catch (_) {}
+
+    try {
+      Object.defineProperty(WrappedWebSocket, '__verityWrapped', { value: true, configurable: true });
+    } catch (_) {
+      WrappedWebSocket.__verityWrapped = true;
+    }
+
+    try {
+      Object.defineProperty(ctx, 'WebSocket', {
+        value: WrappedWebSocket,
+        configurable: true,
+        writable: true
+      });
+    } catch (_) {
+      ctx.WebSocket = WrappedWebSocket;
+    }
+  }
+
   // ── Step 0.1: Context Hardening (Freeze fetch and protect against iframe recovery) ──
   function hardenContext(ctx) {
     if (!ctx || ctx.__VERITY_CTX_HARDENED__) return;
@@ -79,6 +157,10 @@
         } catch (_) {
           ctx.fetch = wrappedFetch;
         }
+      }
+
+      if (typeof ctx.WebSocket === 'function') {
+        wrapWebSocket(ctx);
       }
     } catch (_) {}
   }
@@ -257,6 +339,11 @@
     };
   }
 
+  // ── 4b. Intercept WebSocket (Exfiltration Guard) ───────────────────────────
+  if (typeof window !== 'undefined' && typeof window.WebSocket === 'function') {
+    wrapWebSocket(window);
+  }
+
   // ── 5. Intercept navigator.clipboard.writeText (ClickFix & Address Swap Guard) ───
   if (navigator && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
     const origWriteText = navigator.clipboard.writeText.bind(navigator.clipboard);
@@ -301,6 +388,84 @@
         return Promise.reject(new DOMException('Screen sharing blocked on unverified domain by Verity Security Shield', 'NotAllowedError'));
       }
       return origGetDisplayMedia.apply(this, arguments);
+    };
+  }
+
+  // ── 6b. Anti-Doxxing WebRTC & Surveillance Trap for "Digital Arrest" Scams ──
+  function detectDigitalArrestSurveillanceTrap(pageText = '', requestedPermissions = [], targetHostname = '') {
+    const host = (targetHostname || (typeof location !== 'undefined' ? location.hostname : '') || '').toLowerCase().replace(/^www\./, '');
+    const isGov = host.endsWith('.gov.in') || host.endsWith('.nic.in') || host === 'gov.in' || host === 'nic.in';
+    if (isGov) return { detected: false };
+
+    const text = String(pageText || '').toLowerCase();
+    const SURVEILLANCE_LURES = [
+      'digital arrest', 'cbi', 'police', 'supreme court', 'high court', 'courtroom', 'virtual court',
+      'arrest warrant', 'customs', 'narcotics', 'ed notice', 'crime branch', 'money laundering',
+      'kyc verification', 'rbi safe account', 'trai disconnection', 'cyber crime',
+      'सीबीआई', 'डिजिटल अरेस्ट', 'पुलिस', 'वारंट', 'न्यायालय',
+      'சிபிஐ', 'டிஜிட்டல் கைது', 'காவல்துறை', 'நீதிமன்றம்'
+    ];
+
+    const matchedLure = SURVEILLANCE_LURES.find(l => text.includes(l));
+    if (!matchedLure) return { detected: false };
+
+    let perms = [];
+    if (Array.isArray(requestedPermissions)) {
+      perms = requestedPermissions.map(p => String(p).toLowerCase());
+    } else if (requestedPermissions && typeof requestedPermissions === 'object') {
+      if (requestedPermissions.video) perms.push('camera');
+      if (requestedPermissions.audio) perms.push('microphone');
+      if (requestedPermissions.geolocation) perms.push('geolocation');
+    }
+
+    const hasSurveillance = perms.length === 0 || perms.some(p =>
+      p.includes('cam') || p.includes('video') || p.includes('mic') || p.includes('audio') || p.includes('geo') || p.includes('loc')
+    );
+
+    if (hasSurveillance) {
+      return {
+        detected: true,
+        signal: 'SIG_SURVEILLANCE_EXTORTION_TRAP',
+        score: 90,
+        verdict: 'danger',
+        reason: `Digital Arrest surveillance extortion trap detected: Unauthorized webcam/microphone or location surveillance requested under fake authority "${matchedLure}".`,
+        matchedLure,
+        requestedPermissions: perms
+      };
+    }
+    return { detected: false };
+  }
+
+  if (typeof window !== 'undefined') {
+    window.detectDigitalArrestSurveillanceTrap = detectDigitalArrestSurveillanceTrap;
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+    const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = function (constraints) {
+      const pageText = (document.body ? (document.body.innerText || '') : '').toLowerCase();
+      const check = detectDigitalArrestSurveillanceTrap(pageText, constraints || ['camera', 'microphone']);
+      if (check.detected) {
+        notifyThreat('SIG_SURVEILLANCE_EXTORTION_TRAP', { reason: check.reason, permissions: check.requestedPermissions });
+        return Promise.reject(new DOMException('Webcam/Microphone surveillance blocked by Verity Security Shield on unauthorized domain', 'NotAllowedError'));
+      }
+      return origGetUserMedia.apply(this, arguments);
+    };
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.geolocation && typeof navigator.geolocation.getCurrentPosition === 'function') {
+    const origGetCurrentPosition = navigator.geolocation.getCurrentPosition.bind(navigator.geolocation);
+    navigator.geolocation.getCurrentPosition = function (successCb, errorCb, options) {
+      const pageText = (document.body ? (document.body.innerText || '') : '').toLowerCase();
+      const check = detectDigitalArrestSurveillanceTrap(pageText, ['geolocation']);
+      if (check.detected) {
+        notifyThreat('SIG_SURVEILLANCE_EXTORTION_TRAP', { reason: check.reason, permissions: ['geolocation'] });
+        if (typeof errorCb === 'function') {
+          errorCb({ code: 1, message: 'Geolocation blocked by Verity Security Shield on unauthorized domain' });
+        }
+        return;
+      }
+      return origGetCurrentPosition.apply(this, arguments);
     };
   }
 

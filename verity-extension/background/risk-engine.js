@@ -1,8 +1,9 @@
-import { isTrustedTopDomain } from './rules.js';
+import { isTrustedTopDomain, isAbusedFreeHostingOrTunnel } from './rules.js';
 import { isAllowlistedDomain } from '../shared/legit-domains.js';
 import { SIGNAL_CATEGORY_MAP, CATEGORY_CAPS, t } from '../shared/messages.js';
 import { detectFaviconSpoof } from './favicon-matcher.js';
 import { isLegitimateFederatedLogin } from './enterprise-whitelist.js';
+import { HIGH_VALUE_DOM_BRANDS } from '../content/bharat-scam-detectors.js';
 
 /**
  * Scaling factor for on-device ML score (0.0 = disabled, 1.0 = standard 0-25 pts).
@@ -89,11 +90,36 @@ export function calculateRisk(
 
   // ── 1. Process URL Heuristic Rule Signals ──────────────────────────────────
   (ruleSignals || []).forEach(s => {
-    if (!s.triggered) return;
+    if (s.triggered === false) return;
     const sigId = s.id || 'SIG_URL_SUSPICIOUS';
     const source = (sigId === 'RULE_IP_BASED_URL') ? 'url' : 'url';
     emitSignal(sigId, s.params || {}, s.score || 0, source);
   });
+
+  // ── 1b. Free Hosting / Tunnel Credential Phishing ─────────────────────────
+  const isFreeHostingOrTunnel = isAbusedFreeHostingOrTunnel(hostname);
+  const urlLowerForFreeHost = (url || '').toLowerCase();
+  const freeHostPhishKeywords = ['login', 'signin', 'kyc', 'bank', 'netbanking', 'upi', 'yono', 'sbi', 'hdfc', 'icici', 'axis', 'kotak', 'pnb', 'paytm', 'phonepe', 'gpay'];
+  const hasFreeHostUrlLure = freeHostPhishKeywords.some(kw => urlLowerForFreeHost.includes(kw));
+
+  const isAllowlisted = isAllowlistedDomain(hostname);
+  const hasCredentialOrBrandIndicators = !!(
+    (domSignals && (
+      domSignals.hasPasswordInput ||
+      domSignals.hasCredentialCollection ||
+      domSignals.paymentFields?.otp ||
+      domSignals.paymentFields?.pin ||
+      (domSignals.domBrandSpoof && domSignals.domBrandSpoof.detected) ||
+      domSignals.hasBrandMismatch
+    )) ||
+    (paymentAnalysis && paymentAnalysis.domainMismatch)
+  );
+
+  if (isFreeHostingOrTunnel && (hasFreeHostUrlLure || hasCredentialOrBrandIndicators) && !isAllowlisted) {
+    emitSignal('SIG_FREE_HOST_CREDENTIAL_PHISH', { platform: hostname }, 75, 'url', 'brand_impersonation');
+    categories.phishing.flagged = true;
+    categories.phishing.reason = t('SIG_FREE_HOST_CREDENTIAL_PHISH', { platform: hostname });
+  }
 
   // ── 2. Process ML Signal ───────────────────────────────────────────────────
   if (activeMlWeight > 0 && mlScore !== null && mlScore > 30) {
@@ -106,9 +132,63 @@ export function calculateRisk(
   }
 
   // ── 3. Process DOM Signals ─────────────────────────────────────────────────
-  const isAllowlisted = isAllowlistedDomain(hostname);
-
   if (domSignals) {
+    // A0. DOM Title / Heading Brand Spoofing (Hard Override)
+    let detectedBrandSpoof = null;
+    if (domSignals.domBrandSpoof && domSignals.domBrandSpoof.detected) {
+      detectedBrandSpoof = domSignals.domBrandSpoof.brand || 'Official Institution';
+    } else if (domSignals.hasPasswordInput || domSignals.hasCredentialCollection || domSignals.paymentFields?.otp || domSignals.paymentFields?.pin) {
+      const titleAndText = ((domSignals.pageTitle || '') + ' ' + (domSignals.headingText || '')).toLowerCase();
+      if (titleAndText) {
+        for (const brand of HIGH_VALUE_DOM_BRANDS) {
+          if (brand.patterns.some(p => titleAndText.includes(p))) {
+            const isOfficial = brand.officialDomains.some(d => hostname === d || hostname.endsWith('.' + d));
+            if (!isOfficial) {
+              detectedBrandSpoof = brand.name;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (detectedBrandSpoof && !isAllowlisted) {
+      emitSignal('SIG_DOM_BRAND_IMPERSONATION', { brand: detectedBrandSpoof }, 85, 'dom', 'brand_impersonation');
+      categories.phishing.flagged = true;
+      categories.phishing.reason = t('SIG_DOM_BRAND_IMPERSONATION', { brand: detectedBrandSpoof });
+    }
+
+    // A00. Cross-Origin Brand Asset Leeching & Favicon Theft (Hard Override)
+    if (domSignals.brandAssetTheft && domSignals.brandAssetTheft.detected && !isAllowlisted) {
+      const leechedBrand = domSignals.brandAssetTheft.leechedBrand || 'Protected Brand';
+      emitSignal('SIG_CROSS_ORIGIN_BRAND_ASSET_THEFT', { brand: leechedBrand, assetUrl: domSignals.brandAssetTheft.assetUrl }, 85, 'dom', 'brand_impersonation');
+      categories.phishing.flagged = true;
+      categories.phishing.reason = t('SIG_CROSS_ORIGIN_BRAND_ASSET_THEFT', { brand: leechedBrand });
+    }
+
+    // A000. Real-time Keylogger Honeytoken Tripped
+    if (domSignals.keyloggerHoneytokenTripped && !isAllowlisted) {
+      emitSignal('SIG_REALTIME_KEYLOGGER_HONEYTOKEN_TRIPPED', {}, 90, 'dom', 'dom_credentials');
+      categories.phishing.flagged = true;
+      categories.phishing.reason = t('SIG_REALTIME_KEYLOGGER_HONEYTOKEN_TRIPPED');
+    }
+
+    // A0000. Surveillance Extortion Trap
+    if (domSignals.surveillanceExtortionTrap && !isAllowlisted) {
+      const phrase = domSignals.surveillanceExtortionTrap.matchedLure || 'unauthorized surveillance';
+      emitSignal('SIG_SURVEILLANCE_EXTORTION_TRAP', { phrase }, 90, 'dom', 'scam_language');
+      categories.scam.flagged = true;
+      categories.scam.reason = t('SIG_SURVEILLANCE_EXTORTION_TRAP', { phrase });
+    }
+
+    // A00000. NPCI Unsigned Collect Forensic Trap
+    if (domSignals.npciUnsignedCollect && !isAllowlisted) {
+      const vpa = domSignals.npciUnsignedCollect.payeeVpa || 'unverified payee';
+      emitSignal('SIG_NPCI_UNSIGNED_COLLECT_FORENSIC', { payeeVpa: vpa }, 90, 'dom', 'payment_phishing');
+      categories.payment.flagged = true;
+      categories.payment.reason = t('SIG_NPCI_UNSIGNED_COLLECT_FORENSIC', { payeeVpa: vpa });
+    }
+
     // A. DOM Brand Impersonation on unverified domain
     if (!domSignals.isTrustedDomain && !isAllowlisted) {
       const textAndTitle = ((domSignals.pageTitle || '') + ' ' + (domSignals.pageText || '')).toLowerCase();
@@ -264,6 +344,27 @@ export function calculateRisk(
       categories.scamFraud.reason = domSignals.upiQrReason || 'Deceptive UPI QR code collect trap detected';
     }
 
+    // Crack / Warez / Piracy Site Shield Traps
+    const crackTraps = domSignals.crackSiteTraps || {};
+    if ((crackTraps.hasArchivePasswordStealerLure || domSignals.archivePasswordStealerLure) && !isAllowlisted) {
+      emitSignal('SIG_ARCHIVE_PASSWORD_STEALER_LURE', { phrase: crackTraps.passwordPhrase || 'archive password lure' }, 90, 'dom', 'scam_language');
+      categories.scamFraud.flagged = true;
+      categories.malware.flagged = true;
+      categories.malware.source = 'Archive password stealer lure';
+    }
+    if ((crackTraps.hasClickjackInvisibleOverlay || domSignals.clickjackInvisibleOverlay) && !isAllowlisted) {
+      emitSignal('SIG_CLICKJACK_INVISIBLE_OVERLAY', {}, 80, 'dom', 'malvertising');
+      categories.suspicious.flagged = true;
+    }
+    if ((crackTraps.hasFakeDownloadButtonTrap || domSignals.fakeDownloadButtonTrap) && !isAllowlisted) {
+      emitSignal('SIG_FAKE_DOWNLOAD_BUTTON_TRAP', { target: crackTraps.fakeDownloadTarget || 'ad-rotator/executable' }, 85, 'dom', 'malvertising');
+      categories.scamFraud.flagged = true;
+    }
+    if ((crackTraps.hasNotificationPermissionTrap || domSignals.notificationPermissionTrap) && !isAllowlisted) {
+      emitSignal('SIG_NOTIFICATION_PERMISSION_TRAP', {}, 80, 'dom', 'malvertising');
+      categories.suspicious.flagged = true;
+    }
+
     // C. Scam Language / PUP / ClickFix
     if (domSignals.clickFixAttack) {
       emitSignal('SIG_CLICKFIX_CLIPBOARD_ATTACK', { phrase: domSignals.clickFixReason }, 85, 'dom');
@@ -329,6 +430,17 @@ export function calculateRisk(
     redirectSignals.structuredReasons.forEach(r => {
       emitSignal(r.id, r.params || {}, r.score || 0, r.source || 'redirect', r.category);
     });
+  }
+  if (redirectSignals && redirectSignals.chainForensics) {
+    const cf = redirectSignals.chainForensics;
+    if (cf.signals && Array.isArray(cf.signals)) {
+      if (cf.signals.includes('SIG_MALVERTISING_REDIRECT_CHAIN') && !rawSignals.some(s => s.id === 'SIG_MALVERTISING_REDIRECT_CHAIN')) {
+        emitSignal('SIG_MALVERTISING_REDIRECT_CHAIN', { elapsedMs: cf.elapsedMs }, 80, 'redirect', 'malvertising');
+      }
+      if (cf.signals.includes('SIG_TAB_UNDER_HIJACK') && !rawSignals.some(s => s.id === 'SIG_TAB_UNDER_HIJACK')) {
+        emitSignal('SIG_TAB_UNDER_HIJACK', {}, 85, 'redirect', 'malvertising');
+      }
+    }
   }
 
   // ── 5. Process Threat Intelligence Signals ─────────────────────────────────
@@ -547,11 +659,31 @@ export function calculateRisk(
   const hasBrandImpersonationSignal = rawSignals.some(s => s.category === 'brand_impersonation');
   const hasFaviconSpoof = rawSignals.some(s => s.id === 'SIG_FAVICON_BRAND_SPOOF');
   const hasFreeHostingTrap = rawSignals.some(s => s.id === 'SIG_FREE_HOSTING_CREDENTIAL_TRAP') || !!(domSignals && domSignals.freeHostingCredentialTrap);
+  const hasFreeHostCredentialPhish = rawSignals.some(s => s.id === 'SIG_FREE_HOST_CREDENTIAL_PHISH');
+  const hasDomBrandSpoof = rawSignals.some(s => s.id === 'SIG_DOM_BRAND_IMPERSONATION') || !!(domSignals && domSignals.domBrandSpoof && domSignals.domBrandSpoof.detected);
   const hasEvasionTechnique = rawSignals.some(s => s.id === 'SIG_EVASION_TECHNIQUE_DETECTED') || !!(domSignals && domSignals.evasionTechniqueDetected);
   const hasCanvasCredentialLure = rawSignals.some(s => s.id === 'SIG_CANVAS_CREDENTIAL_FORM') || !!(domSignals && domSignals.canvasCredentialLure);
   const hasDigitalArrestExtortion = rawSignals.some(s => s.id === 'SIG_DIGITAL_ARREST_EXTORTION') || !!(domSignals && domSignals.digitalArrestExtortion);
   const hasMaliciousApkDropper = rawSignals.some(s => s.id === 'SIG_MALICIOUS_APK_DROPPER') || !!(domSignals && domSignals.maliciousApkDropper);
   const hasUpiQrCollectTrap = rawSignals.some(s => s.id === 'SIG_UPI_QR_COLLECT_TRAP') || !!(domSignals && domSignals.upiQrCollectTrap);
+  const hasBrandAssetTheft = rawSignals.some(s => s.id === 'SIG_CROSS_ORIGIN_BRAND_ASSET_THEFT') || !!(domSignals && domSignals.brandAssetTheft && domSignals.brandAssetTheft.detected);
+  const hasNpciForensicCollect = rawSignals.some(s => s.id === 'SIG_NPCI_UNSIGNED_COLLECT_FORENSIC') || !!(domSignals && domSignals.npciUnsignedCollect);
+  const hasKeyloggerHoneytokenTripped = rawSignals.some(s => s.id === 'SIG_REALTIME_KEYLOGGER_HONEYTOKEN_TRIPPED') || !!(domSignals && domSignals.keyloggerHoneytokenTripped);
+  const hasSurveillanceExtortionTrap = rawSignals.some(s => s.id === 'SIG_SURVEILLANCE_EXTORTION_TRAP') || !!(domSignals && domSignals.surveillanceExtortionTrap);
+
+  const hasMalvertisingRedirectChain = rawSignals.some(s => s.id === 'SIG_MALVERTISING_REDIRECT_CHAIN') ||
+                                       !!(redirectSignals && redirectSignals.chainForensics && redirectSignals.chainForensics.signals && redirectSignals.chainForensics.signals.includes('SIG_MALVERTISING_REDIRECT_CHAIN'));
+  const hasTabUnderHijack = rawSignals.some(s => s.id === 'SIG_TAB_UNDER_HIJACK') ||
+                            !!(redirectSignals && redirectSignals.chainForensics && redirectSignals.chainForensics.signals && redirectSignals.chainForensics.signals.includes('SIG_TAB_UNDER_HIJACK'));
+
+  const hasArchivePasswordStealerLure = rawSignals.some(s => s.id === 'SIG_ARCHIVE_PASSWORD_STEALER_LURE') ||
+                                        !!(domSignals && (domSignals.archivePasswordStealerLure || domSignals.crackSiteTraps?.hasArchivePasswordStealerLure));
+  const hasClickjackInvisibleOverlay = rawSignals.some(s => s.id === 'SIG_CLICKJACK_INVISIBLE_OVERLAY') ||
+                                       !!(domSignals && (domSignals.clickjackInvisibleOverlay || domSignals.crackSiteTraps?.hasClickjackInvisibleOverlay));
+  const hasFakeDownloadButtonTrap = rawSignals.some(s => s.id === 'SIG_FAKE_DOWNLOAD_BUTTON_TRAP') ||
+                                    !!(domSignals && (domSignals.fakeDownloadButtonTrap || domSignals.crackSiteTraps?.hasFakeDownloadButtonTrap));
+  const hasNotificationPermissionTrap = rawSignals.some(s => s.id === 'SIG_NOTIFICATION_PERMISSION_TRAP') ||
+                                        !!(domSignals && (domSignals.notificationPermissionTrap || domSignals.crackSiteTraps?.hasNotificationPermissionTrap));
 
   const hasCyberFraudOverride =
     hasIllegalWebPinCollection ||
@@ -564,6 +696,8 @@ export function calculateRisk(
     hasBrandAssetHotlinkSpoof ||
     hasFaviconSpoof ||
     hasFreeHostingTrap ||
+    hasFreeHostCredentialPhish ||
+    hasDomBrandSpoof ||
     hasTechSupportRemoteScam ||
     hasRemoteAccessScamDownload ||
     hasUntrustedScreenShare ||
@@ -577,6 +711,11 @@ export function calculateRisk(
     hasMaliciousQrPayload ||
     hasRoguePushOrSwTrap ||
     hasCanvasCredentialLure ||
+    hasBrandAssetTheft ||
+    hasNpciForensicCollect ||
+    hasKeyloggerHoneytokenTripped ||
+    hasSurveillanceExtortionTrap ||
+    hasArchivePasswordStealerLure ||
     hasBrandMismatchWithCredentials;
 
   const suspTlds = [
@@ -599,6 +738,11 @@ export function calculateRisk(
 
   const hasMalvertisingCriticalOverride =
     (pointsByCategory['malvertising'] || 0) >= 50 ||
+    hasMalvertisingRedirectChain ||
+    hasTabUnderHijack ||
+    hasClickjackInvisibleOverlay ||
+    hasFakeDownloadButtonTrap ||
+    hasNotificationPermissionTrap ||
     rawSignals.some(s => s.id === 'SIG_POPUNDER_SPAWN') ||
     rawSignals.some(s => s.id === 'SIG_MALVERTISING_REDIRECT') ||
     (redirectSignals && (redirectSignals.popunderSpawn || redirectSignals.popunderDetected)) ||
@@ -608,6 +752,16 @@ export function calculateRisk(
     riskScore = Math.max(riskScore, 95);
   } else if (hasPhishingKitWebhookExfil) {
     riskScore = Math.max(riskScore, 95);
+  } else if (hasKeyloggerHoneytokenTripped) {
+    riskScore = Math.max(riskScore, 90);
+  } else if (hasSurveillanceExtortionTrap) {
+    riskScore = Math.max(riskScore, 90);
+  } else if (hasNpciForensicCollect) {
+    riskScore = Math.max(riskScore, 90);
+  } else if (hasArchivePasswordStealerLure) {
+    riskScore = Math.max(riskScore, 90);
+  } else if (hasBrandAssetTheft) {
+    riskScore = Math.max(riskScore, 85);
   } else if (hasBitbAttack) {
     riskScore = Math.max(riskScore, 95);
   } else if (hasBitbPopupSpoof) {
@@ -624,6 +778,16 @@ export function calculateRisk(
     riskScore = Math.max(riskScore, 85);
   } else if (hasUpiQrCollectTrap) {
     riskScore = Math.max(riskScore, 85);
+  } else if (hasTabUnderHijack) {
+    riskScore = Math.max(riskScore, 85);
+  } else if (hasFakeDownloadButtonTrap) {
+    riskScore = Math.max(riskScore, 85);
+  } else if (hasMalvertisingRedirectChain) {
+    riskScore = Math.max(riskScore, 80);
+  } else if (hasClickjackInvisibleOverlay) {
+    riskScore = Math.max(riskScore, 80);
+  } else if (hasNotificationPermissionTrap) {
+    riskScore = Math.max(riskScore, 80);
   } else if (hasAitmReverseProxy) {
     riskScore = Math.max(riskScore, 95);
   } else if (hasClipboardAddressSwap) {
@@ -642,6 +806,10 @@ export function calculateRisk(
     riskScore = Math.max(riskScore, 90);
   } else if (hasBrandMismatchWithCredentials) {
     riskScore = Math.max(riskScore, 90);
+  } else if (hasDomBrandSpoof) {
+    riskScore = Math.max(riskScore, 85);
+  } else if (hasFreeHostCredentialPhish) {
+    riskScore = Math.max(riskScore, 75);
   } else if (hasKycCyberFraud) {
     riskScore = Math.max(riskScore, 85);
   } else if (hasMaliciousQrPayload) {
@@ -691,7 +859,7 @@ export function calculateRisk(
   // ── 8. Apply Convergence & Allowlist Rules ──────────────────────────────────
   // A. Independent Allowlist Rule:
   // Pages on legit_domains.json cap at Caution (max 40) unless dangerous download, credential-exfil, ClickFix, or malvertising override fires
-  if (isAllowlisted && !hasDangerousDownload && !hasCredentialExfil && !hasPhishingKitWebhookExfil && !hasClickFix && !hasMalvertisingCriticalOverride && !hasRemoteAccessScamDownload && !hasBrandAssetHotlinkSpoof && !hasTechSupportRemoteScam && !hasBitbAttack && !hasAitmReverseProxy && !hasClipboardAddressSwap && !hasMaliciousQrPayload && !hasFaviconSpoof && !hasFreeHostingTrap) {
+  if (isAllowlisted && !hasDangerousDownload && !hasCredentialExfil && !hasPhishingKitWebhookExfil && !hasClickFix && !hasMalvertisingCriticalOverride && !hasRemoteAccessScamDownload && !hasBrandAssetHotlinkSpoof && !hasTechSupportRemoteScam && !hasBitbAttack && !hasAitmReverseProxy && !hasClipboardAddressSwap && !hasMaliciousQrPayload && !hasFaviconSpoof && !hasFreeHostingTrap && !hasDomBrandSpoof && !hasFreeHostCredentialPhish) {
     riskScore = Math.min(riskScore, 40);
   }
 

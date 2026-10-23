@@ -991,6 +991,340 @@ function detectCanvasFormLures() {
   return { detected: false };
 }
 
+// ─── High-Value Institutional Brands for DOM Spoof Traps ─────────────────────
+const HIGH_VALUE_DOM_BRANDS = [
+  {
+    name: 'State Bank of India',
+    patterns: ['state bank of india', 'onlinesbi', 'yono sbi', 'sbi netbanking', 'yono', 'भारतीय स्टेट बैंक'],
+    officialDomains: ['sbi.co.in', 'onlinesbi.sbi', 'sbi.bank.in', 'statebankofindia.com', 'bank.sbi']
+  },
+  {
+    name: 'OnlineSBI',
+    patterns: ['onlinesbi'],
+    officialDomains: ['onlinesbi.sbi', 'sbi.co.in', 'sbi.bank.in']
+  },
+  {
+    name: 'YONO SBI',
+    patterns: ['yono sbi'],
+    officialDomains: ['sbi.co.in', 'onlinesbi.sbi', 'sbi.bank.in']
+  },
+  {
+    name: 'HDFC Bank',
+    patterns: ['hdfc bank', 'hdfc netbanking', 'hdfcbank'],
+    officialDomains: ['hdfcbank.com', 'hdfc.bank.in', 'hdfc.com']
+  },
+  {
+    name: 'ICICI Bank',
+    patterns: ['icici bank', 'icici netbanking', 'icicibank'],
+    officialDomains: ['icicibank.com', 'icici.bank.in']
+  },
+  {
+    name: 'Axis Bank',
+    patterns: ['axis bank', 'axis netbanking', 'axisbank'],
+    officialDomains: ['axisbank.com', 'axis.bank.in']
+  },
+  {
+    name: 'Kotak Mahindra',
+    patterns: ['kotak mahindra', 'kotak bank', 'kotak netbanking', 'kotak 811'],
+    officialDomains: ['kotak.com', 'kotak.bank.in', 'kotakbank.com']
+  },
+  {
+    name: 'Punjab National Bank',
+    patterns: ['punjab national bank', 'pnb netbanking', 'pnb bank', 'pnb one', 'पंजाब नेशनल बैंक'],
+    officialDomains: ['pnbindia.in', 'pnb.bank.in', 'netpnb.com']
+  },
+  {
+    name: 'India Post',
+    patterns: ['india post', 'indiapost', 'bharatiya dak', 'भारतीय डाक', 'தபால்'],
+    officialDomains: ['indiapost.gov.in', 'ippbonline.com', 'indiapostgdsonline.gov.in']
+  },
+  {
+    name: 'Bharatiya Dak',
+    patterns: ['bharatiya dak', 'भारतीय डाक'],
+    officialDomains: ['indiapost.gov.in', 'ippbonline.com', 'indiapostgdsonline.gov.in']
+  },
+  {
+    name: 'Income Tax Department',
+    patterns: ['income tax department', 'incometax department', 'incometax india', 'e-filing incometax', 'आयकर विभाग'],
+    officialDomains: ['incometax.gov.in', 'incometaxindia.gov.in', 'tin-nsdl.com']
+  },
+  {
+    name: 'DigiLocker',
+    patterns: ['digilocker', 'डिजिलॉकर'],
+    officialDomains: ['digilocker.gov.in']
+  },
+  {
+    name: 'Parivahan',
+    patterns: ['parivahan sewa', 'parivahan', 'sarathi parivahan', 'vahan parivahan', 'e-challan parivahan', 'echallan parivahan'],
+    officialDomains: ['parivahan.gov.in', 'sarathi.parivahan.gov.in', 'vahan.parivahan.gov.in', 'echallan.parivahan.gov.in']
+  },
+  {
+    name: 'EPFO',
+    patterns: ['epfo', 'epfindia', 'employees provident fund', 'कर्मचारी भविष्य निधि'],
+    officialDomains: ['epfindia.gov.in']
+  },
+  {
+    name: 'Paytm',
+    patterns: ['paytm', 'paytm payments bank', 'paytm netbanking'],
+    officialDomains: ['paytm.com', 'paytmbank.com']
+  },
+  {
+    name: 'PhonePe',
+    patterns: ['phonepe'],
+    officialDomains: ['phonepe.com']
+  },
+  {
+    name: 'Google Pay',
+    patterns: ['google pay', 'gpay'],
+    officialDomains: ['pay.google.com', 'google.com']
+  },
+  {
+    name: 'Google',
+    patterns: ['google', 'google account', 'google sign in'],
+    officialDomains: ['google.com', 'accounts.google.com', 'google.co.in']
+  },
+  {
+    name: 'Microsoft',
+    patterns: ['microsoft', 'office 365', 'outlook', 'microsoft account'],
+    officialDomains: ['microsoft.com', 'live.com', 'office.com', 'microsoftonline.com']
+  }
+];
+
+function detectDomBrandSpoof(domDocument, hostname = '') {
+  const doc = domDocument || (typeof document !== 'undefined' ? document : null);
+  if (!doc) return { detected: false, brand: null };
+
+  const currentHost = (hostname || (typeof location !== 'undefined' ? location.hostname : '') || '').toLowerCase().replace(/^www\./, '');
+  if (!currentHost) return { detected: false, brand: null };
+
+  const title = (doc.title || '').toLowerCase();
+  let headingText = '';
+  try {
+    const headings = doc.querySelectorAll ? doc.querySelectorAll('h1, h2') : [];
+    for (let i = 0; i < headings.length; i++) {
+      headingText += ' ' + (headings[i].innerText || headings[i].textContent || '');
+    }
+  } catch (_) {}
+  const targetText = `${title} ${headingText}`.toLowerCase();
+
+  let hasSensitiveInput = false;
+  try {
+    const inputs = doc.querySelectorAll ? doc.querySelectorAll('input') : [];
+    for (let i = 0; i < inputs.length; i++) {
+      const inp = inputs[i];
+      const type = (inp.type || '').toLowerCase();
+      const attr = ((inp.name || '') + ' ' + (inp.id || '') + ' ' + (inp.placeholder || '') + ' ' + (inp.getAttribute ? inp.getAttribute('aria-label') || '' : '') + ' ' + (inp.className || '')).toLowerCase();
+      if (type === 'password' || /password|passwd|otp|pin|mpin|cvv|card|account|mobile|phone/i.test(attr)) {
+        hasSensitiveInput = true;
+        break;
+      }
+    }
+  } catch (_) {}
+
+  if (!hasSensitiveInput) {
+    return { detected: false, brand: null };
+  }
+
+  for (const brand of HIGH_VALUE_DOM_BRANDS) {
+    const matchesBrand = brand.patterns.some(p => targetText.includes(p));
+    if (matchesBrand) {
+      const isOfficial = brand.officialDomains.some(d => currentHost === d || currentHost.endsWith('.' + d));
+      if (!isOfficial) {
+        return {
+          detected: true,
+          brand: brand.name
+        };
+      }
+    }
+  }
+
+  return { detected: false, brand: null };
+}
+
+/**
+ * UPGRADE 2: Cross-Origin Brand Asset Leeching & Visual Favicon Trap
+ * Detects phishing pages that evade text scanners by hotlinking official brand favicons
+ * or logos from authoritative brand CDNs while demanding sensitive credentials.
+ *
+ * @param {Document|HTMLElement} [doc] - DOM document
+ * @param {string} [currentHostname=''] - Hostname of current page
+ * @returns {{ detected: boolean, leechedBrand: string|null, assetUrl: string|null }}
+ */
+function detectCrossOriginBrandAssetTheft(doc, currentHostname = '') {
+  const documentNode = doc || (typeof document !== 'undefined' ? document : null);
+  if (!documentNode) return { detected: false, leechedBrand: null, assetUrl: null };
+
+  const currentHost = (currentHostname || (typeof location !== 'undefined' ? location.hostname : '') || '').toLowerCase().replace(/^www\./, '');
+  if (!currentHost) return { detected: false, leechedBrand: null, assetUrl: null };
+
+  // 1. Check if page has credential/OTP/PIN/card inputs
+  let hasSensitiveInput = false;
+  try {
+    const inputs = documentNode.querySelectorAll ? documentNode.querySelectorAll('input') : [];
+    for (let i = 0; i < inputs.length; i++) {
+      const inp = inputs[i];
+      const type = (inp.type || '').toLowerCase();
+      const attr = ((inp.name || '') + ' ' + (inp.id || '') + ' ' + (inp.placeholder || '') + ' ' + (inp.className || '') + ' ' + (inp.getAttribute ? inp.getAttribute('aria-label') || '' : '')).toLowerCase();
+      if (type === 'password' || /password|passwd|otp|pin|mpin|cvv|card|account|login|user|pan|aadhaar/i.test(attr)) {
+        hasSensitiveInput = true;
+        break;
+      }
+    }
+  } catch (_) {}
+
+  if (!hasSensitiveInput) {
+    return { detected: false, leechedBrand: null, assetUrl: null };
+  }
+
+  // 2. Scan up to 40 icon and img elements
+  const candidates = [];
+  try {
+    const links = documentNode.querySelectorAll ? documentNode.querySelectorAll('link[rel*="icon"]') : [];
+    for (let i = 0; i < links.length && candidates.length < 40; i++) {
+      const href = links[i].getAttribute ? (links[i].getAttribute('href') || links[i].href || '') : '';
+      if (href) candidates.push(href);
+    }
+    const imgs = documentNode.querySelectorAll ? documentNode.querySelectorAll('img[src]') : [];
+    for (let i = 0; i < imgs.length && candidates.length < 40; i++) {
+      const src = imgs[i].getAttribute ? (imgs[i].getAttribute('src') || imgs[i].src || '') : '';
+      if (src) candidates.push(src);
+    }
+  } catch (_) {}
+
+  for (const rawUrl of candidates) {
+    if (!rawUrl || typeof rawUrl !== 'string') continue;
+    let assetHost = '';
+    try {
+      if (rawUrl.startsWith('//')) {
+        assetHost = new URL('https:' + rawUrl).hostname.toLowerCase().replace(/^www\./, '');
+      } else if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+        assetHost = new URL(rawUrl).hostname.toLowerCase().replace(/^www\./, '');
+      }
+    } catch (_) {}
+
+    if (!assetHost || assetHost === currentHost) continue;
+
+    for (const brand of HIGH_VALUE_DOM_BRANDS) {
+      const matchesAssetDomain = brand.officialDomains.some(d => assetHost === d || assetHost.endsWith('.' + d));
+      if (matchesAssetDomain) {
+        const isCurrentHostOwnedByBrand = brand.officialDomains.some(d => currentHost === d || currentHost.endsWith('.' + d));
+        if (!isCurrentHostOwnedByBrand) {
+          return {
+            detected: true,
+            leechedBrand: brand.name,
+            assetUrl: rawUrl
+          };
+        }
+      }
+    }
+  }
+
+  return { detected: false, leechedBrand: null, assetUrl: null };
+}
+
+/**
+ * UPGRADE 3: Validates a numeric string against the standard Luhn checksum algorithm (Mod 10).
+ *
+ * @param {string|number} digitsOnly
+ * @returns {boolean}
+ */
+function isLuhnValidCard(digitsOnly) {
+  if (!digitsOnly && digitsOnly !== 0) return false;
+  const digits = String(digitsOnly).replace(/\D/g, '');
+  if (digits.length < 13 || digits.length > 19) return false;
+  let sum = 0;
+  let shouldDouble = false;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let digit = parseInt(digits.charAt(i), 10);
+    if (shouldDouble) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+    shouldDouble = !shouldDouble;
+  }
+  return sum % 10 === 0;
+}
+
+/**
+ * Replaces real citizen credentials with standard safe test honey-tokens.
+ *
+ * @param {string} inputValue
+ * @param {'card'|'otp'|'pin'|string} [type]
+ * @returns {string}
+ */
+function poisonInputWithHoneyToken(inputValue, type) {
+  if (type === 'card' || (!type && isLuhnValidCard(inputValue))) {
+    return '4000000000000002';
+  }
+  if (type === 'otp' || type === 'pin' || (!type && /^\d{4,6}$/.test(String(inputValue).trim()))) {
+    return '000000';
+  }
+  return '000000';
+}
+
+/**
+ * Identifies when a user enters a Luhn-valid 16-digit card number OR a 4/6-digit PIN/OTP
+ * into an input field on a page with risk indicators or an untrusted host context.
+ *
+ * @param {string} inputValue
+ * @param {Element|object} [inputElement]
+ * @param {boolean} [isUntrustedContext]
+ * @returns {{ isSensitive: boolean, isTrap: boolean, type: string|null, honeyToken: string|null, signal?: string }}
+ */
+function detectSensitiveInputTrap(inputValue, inputElement, isUntrustedContext) {
+  const untrusted = isUntrustedContext !== undefined
+    ? Boolean(isUntrustedContext)
+    : (typeof window !== 'undefined' && (
+        window.location.protocol === 'http:' ||
+        /^(?:\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname) ||
+        (typeof earlyRiskElevated !== 'undefined' && earlyRiskElevated)
+      ));
+
+  if (!untrusted) {
+    return { isSensitive: false, isTrap: false, type: null, honeyToken: null };
+  }
+
+  const rawVal = String(inputValue || '').trim();
+  const digits = rawVal.replace(/\D/g, '');
+
+  // 1. 16-digit (or 13-19 digit) Luhn valid credit/debit card
+  if (isLuhnValidCard(digits)) {
+    const honeyToken = poisonInputWithHoneyToken(digits, 'card');
+    return {
+      isSensitive: true,
+      isTrap: true,
+      type: 'card',
+      honeyToken,
+      signal: 'SIG_REALTIME_KEYLOGGER_HONEYTOKEN_TRIPPED'
+    };
+  }
+
+  // 2. 4-digit or 6-digit OTP/PIN
+  if (digits.length === 4 || digits.length === 6) {
+    let matchesOtpField = false;
+    if (inputElement) {
+      const attr = (((inputElement.name || '') + ' ' + (inputElement.id || '') + ' ' + (inputElement.placeholder || '') + ' ' + (inputElement.className || '') + ' ' + (inputElement.type || '')).toLowerCase());
+      matchesOtpField = /otp|pin|mpin|cvv|code|passcode|token|verify|numeric|password/i.test(attr) || inputElement.type === 'password';
+    } else {
+      matchesOtpField = true;
+    }
+
+    if (matchesOtpField) {
+      const honeyToken = poisonInputWithHoneyToken(digits, 'otp');
+      return {
+        isSensitive: true,
+        isTrap: true,
+        type: digits.length === 4 ? 'pin' : 'otp',
+        honeyToken,
+        signal: 'SIG_REALTIME_KEYLOGGER_HONEYTOKEN_TRIPPED'
+      };
+    }
+  }
+
+  return { isSensitive: false, isTrap: false, type: null, honeyToken: null };
+}
+
 // 1. Signal Collection (Stage 1) - Gated, Lighter Scan
 function collectSignals() {
   const currentHostname = window.location.hostname.toLowerCase().replace(/^www\./, '');
@@ -1174,6 +1508,34 @@ function collectSignals() {
     ? bharatDetectors.detectUpiQrCollectTrap(typeof document !== 'undefined' ? document : null)
     : { detected: false };
 
+  const domBrandSpoof = (!isTrustedDomain && typeof detectDomBrandSpoof === 'function')
+    ? detectDomBrandSpoof(typeof document !== 'undefined' ? document : null, currentHostname)
+    : (bharatDetectors && typeof bharatDetectors.detectDomBrandSpoof === 'function'
+      ? bharatDetectors.detectDomBrandSpoof(typeof document !== 'undefined' ? document : null, currentHostname)
+      : { detected: false, brand: null });
+
+  const brandAssetTheft = (!isTrustedDomain && typeof detectCrossOriginBrandAssetTheft === 'function')
+    ? detectCrossOriginBrandAssetTheft(typeof document !== 'undefined' ? document : null, currentHostname)
+    : { detected: false, leechedBrand: null, assetUrl: null };
+
+  const crackShieldDetector = (typeof detectCrackSiteMalwareTraps === 'function')
+    ? detectCrackSiteMalwareTraps
+    : (typeof globalThis !== 'undefined' && globalThis.detectCrackSiteMalwareTraps)
+    ? globalThis.detectCrackSiteMalwareTraps
+    : null;
+
+  const crackSiteTraps = (!isTrustedDomain && crackShieldDetector)
+    ? crackShieldDetector(typeof document !== 'undefined' ? document : null)
+    : {
+        hasArchivePasswordStealerLure: false,
+        hasClickjackInvisibleOverlay: false,
+        hasFakeDownloadButtonTrap: false,
+        hasNotificationPermissionTrap: false,
+        detected: false,
+        traps: [],
+        signals: []
+      };
+
   // Embedded media player and actual payment inputs check
   const isEmbeddedMedia = /(^|\.)(youtube(-nocookie)?\.com|youtu\.be|vimeo\.com|player\.vimeo\.com|dailymotion\.com|twitch\.tv|player\.twitch\.tv)$/i.test(currentHostname);
   const hasActualPaymentInputs = !!(
@@ -1256,6 +1618,13 @@ function collectSignals() {
     upiQrReason: isTrustedDomain ? null : upiQrCollect.reason,
     upiQrLure: isTrustedDomain ? null : upiQrCollect.lurePhrase,
     hasUpiLink,
+    domBrandSpoof: isTrustedDomain ? { detected: false, brand: null } : domBrandSpoof,
+    brandAssetTheft: isTrustedDomain ? { detected: false, leechedBrand: null, assetUrl: null } : brandAssetTheft,
+    crackSiteTraps: isTrustedDomain ? { detected: false } : crackSiteTraps,
+    archivePasswordStealerLure: isTrustedDomain ? false : crackSiteTraps.hasArchivePasswordStealerLure,
+    clickjackInvisibleOverlay: isTrustedDomain ? false : crackSiteTraps.hasClickjackInvisibleOverlay,
+    fakeDownloadButtonTrap: isTrustedDomain ? false : crackSiteTraps.hasFakeDownloadButtonTrap,
+    notificationPermissionTrap: isTrustedDomain ? false : crackSiteTraps.hasNotificationPermissionTrap,
     pageText:  text.substring(0, 3000),
     pageTitle: (typeof document !== 'undefined' ? document.title : '') || '',
   };
@@ -3840,6 +4209,12 @@ if (typeof globalThis !== 'undefined') {
   globalThis.detectPhishingEvasionTechniques = detectPhishingEvasionTechniques;
   globalThis.detectDigitalArrestAndApkScams = detectDigitalArrestAndApkScams;
   globalThis.detectUpiQrCollectTrap = detectUpiQrCollectTrap;
+  globalThis.detectDomBrandSpoof = detectDomBrandSpoof;
+  globalThis.detectCrossOriginBrandAssetTheft = detectCrossOriginBrandAssetTheft;
+  globalThis.isLuhnValidCard = isLuhnValidCard;
+  globalThis.poisonInputWithHoneyToken = poisonInputWithHoneyToken;
+  globalThis.detectSensitiveInputTrap = detectSensitiveInputTrap;
+  globalThis.HIGH_VALUE_DOM_BRANDS = HIGH_VALUE_DOM_BRANDS;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -3864,6 +4239,12 @@ if (typeof module !== 'undefined' && module.exports) {
     detectPhishingEvasionTechniques,
     detectDigitalArrestAndApkScams,
     detectUpiQrCollectTrap,
+    detectDomBrandSpoof,
+    detectCrossOriginBrandAssetTheft,
+    isLuhnValidCard,
+    poisonInputWithHoneyToken,
+    detectSensitiveInputTrap,
+    HIGH_VALUE_DOM_BRANDS,
   };
 }
 
@@ -3937,5 +4318,43 @@ if (typeof document !== 'undefined') {
         });
       }
     } catch (_) {}
+  }, true);
+}
+
+// ─── Active Keystroke Honey-Token Poisoning Guard ─────────────────────────
+if (typeof document !== 'undefined') {
+  let honeyTokenReported = false;
+  document.addEventListener('input', (event) => {
+    if (isTrustedHostEnvironment) return;
+    const target = event.target;
+    if (!target || !(target instanceof HTMLElement) || target.tagName !== 'INPUT') return;
+    const val = target.value || '';
+    if (val.length < 4) return;
+
+    const trap = detectSensitiveInputTrap(val, target);
+    if (trap && trap.isTrap) {
+      target.value = trap.honeyToken;
+      if (!honeyTokenReported) {
+        honeyTokenReported = true;
+        if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+          chrome.runtime.sendMessage({
+            action: 'RUNTIME_THREAT_DETECTED',
+            type: 'RUNTIME_THREAT_DETECTED',
+            signal: 'SIG_REALTIME_KEYLOGGER_HONEYTOKEN_TRIPPED',
+            url: window.location.href,
+            score: 90
+          }).catch(() => {});
+        }
+        handleEnforcementVerdict({
+          action: 'block',
+          severity: 'danger',
+          state: 'danger',
+          score: 90,
+          riskScore: 90,
+          reasons: ['Critical threat: Real-time keylogger honey-token tripped; card/OTP credentials protected.'],
+          signals: [{ id: 'SIG_REALTIME_KEYLOGGER_HONEYTOKEN_TRIPPED', score: 90 }]
+        });
+      }
+    }
   }, true);
 }

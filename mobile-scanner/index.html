@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta name="theme-color" content="#0b0f19">
+  <meta name="description" content="Zero-install on-device Indian cyber fraud, WhatsApp scam, QR trap & APK forensics lab">
+  <title>Verity Shield: Citizen Cyber Lab</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="app.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "tldts": "./core/vendor/tldts.esm.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand-wrap">
+        <h1 class="brand-title">🛡️ Verity Shield</h1>
+      </div>
+      <nav class="lang-nav" role="tablist" aria-label="Select Language">
+        <button type="button" role="tab" class="lang-btn active" data-lang="en" aria-selected="true">EN</button>
+        <button type="button" role="tab" class="lang-btn" data-lang="ta" aria-selected="false">தமிழ்</button>
+        <button type="button" role="tab" class="lang-btn" data-lang="hi" aria-selected="false">हिं</button>
+        <button type="button" role="tab" class="lang-btn" data-lang="te" aria-selected="false">తె</button>
+      </nav>
+    </header>
+
+    <!-- 4-Tool Citizen Cyber Lab Navigation -->
+    <nav class="tool-nav" role="tablist" aria-label="Cyber Lab Tools">
+      <button type="button" role="tab" class="tool-tab-btn active" id="tab-btn-scanner" data-tool="scanner" aria-selected="true">
+        💬 Link & Chain
+      </button>
+      <button type="button" role="tab" class="tool-tab-btn" id="tab-btn-qr" data-tool="qr" aria-selected="false">
+        📷 QR & UPI
+      </button>
+      <button type="button" role="tab" class="tool-tab-btn" id="tab-btn-file" data-tool="file" aria-selected="false">
+        📁 File & APK
+      </button>
+    </nav>
+
+    <!-- TOOL 1: Message, Link & Redirect Chain Scanner -->
+    <section id="panel-scanner" class="tool-panel" role="tabpanel" aria-labelledby="tab-btn-scanner">
+      <div class="demo-section">
+        <span class="section-label">Demo Pre-sets</span>
+        <div class="chips-scroll" role="toolbar" aria-label="Sample scam scenarios">
+          <button type="button" class="chip-btn" data-demo="sbi_kyc">🏦 Fake SBI KYC</button>
+          <button type="button" class="chip-btn" data-demo="digital_arrest">👮 CBI Digital Arrest</button>
+          <button type="button" class="chip-btn" data-demo="olx_upi">💸 OLX UPI QR Trap</button>
+          <button type="button" class="chip-btn" data-demo="rto_apk">🚗 RTO Challan.apk</button>
+          <button type="button" class="chip-btn" data-demo="multihop_rotator">⛓️ Multi-Hop Rotator</button>
+        </div>
+      </div>
+
+      <textarea
+        id="scanner-textarea"
+        class="scanner-textarea"
+        rows="4"
+        maxlength="5000"
+        placeholder="Paste WhatsApp message, SMS or link here..."
+        aria-label="Paste message or link to scan"></textarea>
+
+      <div class="input-actions">
+        <button type="button" id="btn-check" class="btn-check">Check Link / Text</button>
+        <button type="button" id="btn-unroll" class="btn-secondary">Unroll Redirects</button>
+      </div>
+
+      <!-- Hop-by-Hop Visual Redirect Trace -->
+      <div id="redirect-trace-box" class="redirect-trace-box hidden">
+        <div class="trace-title">
+          <span>Hop-by-Hop Redirect Visual Trace</span>
+          <span id="trace-hop-count" class="hop-badge">0 Hops</span>
+        </div>
+        <div id="hops-list" class="hops-list"></div>
+      </div>
+    </section>
+
+    <!-- TOOL 2: QR Image / UPI Screenshot Inspector -->
+    <section id="panel-qr" class="tool-panel hidden" role="tabpanel" aria-labelledby="tab-btn-qr">
+      <div class="demo-section">
+        <span class="section-label">QR Test Simulations (Desktop)</span>
+        <div class="chips-scroll" role="toolbar" aria-label="QR Simulations">
+          <button type="button" class="chip-btn" data-demo-qr="olx_qr">💸 Simulate OLX QR Trap</button>
+          <button type="button" class="chip-btn" data-demo-qr="unsigned_p2p">⚠️ Unsigned P2P Collect</button>
+          <button type="button" class="chip-btn" data-demo-qr="safe_merchant">✅ Safe Merchant QR</button>
+        </div>
+      </div>
+
+      <div class="file-dropzone" id="qr-dropzone">
+        <span class="dropzone-icon">📷</span>
+        <span class="dropzone-text">Select QR Code / Payment Screenshot</span>
+        <span class="dropzone-subtext">Uses offline on-device BarcodeDetector. Nothing leaves your phone.</span>
+        <input type="file" id="qr-file-input" accept="image/*" capture="environment" class="hidden">
+      </div>
+    </section>
+
+    <!-- TOOL 3: WhatsApp File & APK Magic-Byte Inspector -->
+    <section id="panel-file" class="tool-panel hidden" role="tabpanel" aria-labelledby="tab-btn-file">
+      <div class="demo-section">
+        <span class="section-label">Magic-Byte Simulations</span>
+        <div class="chips-scroll" role="toolbar" aria-label="Magic Byte Simulations">
+          <button type="button" class="chip-btn" data-demo-magic="spoofed_pdf">🚨 HDFC_Statement.pdf (MZ Binary)</button>
+          <button type="button" class="chip-btn" data-demo-magic="rto_apk">🚗 RTO_Challan.apk (PK Archive)</button>
+          <button type="button" class="chip-btn" data-demo-magic="safe_pdf">📄 syllabus.pdf (%PDF Clean)</button>
+        </div>
+      </div>
+
+      <div class="file-dropzone" id="file-dropzone">
+        <span class="dropzone-icon">📁</span>
+        <span class="dropzone-text">Inspect WhatsApp File or .APK</span>
+        <span class="dropzone-subtext">Reads the first 8 bytes locally (File.slice) to catch double-extension and fake document malware 100% offline without opening the file.</span>
+        <input type="file" id="magic-file-input" class="hidden">
+      </div>
+
+      <div id="file-result-box" class="file-result-card hidden">
+        <div class="file-meta-row">
+          <span id="file-meta-name">Filename: -</span>
+          <span id="file-meta-size">- bytes</span>
+        </div>
+        <div class="file-meta-row">
+          <span>Magic Bytes:</span>
+          <span id="file-meta-hex" class="magic-bytes-code">00 00 00 00</span>
+        </div>
+      </div>
+    </section>
+
+    <div id="qr-notice" class="qr-notice hidden" role="status" aria-live="polite"></div>
+
+    <!-- Unified Verdict Traffic Light Card -->
+    <section id="verdict-card" class="verdict-card hidden" role="status" aria-live="polite">
+      <div class="verdict-top">
+        <div class="verdict-status-wrap">
+          <span class="verdict-icon" id="verdict-icon" aria-hidden="true">🟢</span>
+          <span class="verdict-title" id="verdict-title">SAFE</span>
+        </div>
+        <span class="verdict-score-badge" id="verdict-score-badge">0/100</span>
+      </div>
+
+      <div id="upi-trap-banner" class="upi-trap-banner hidden"></div>
+      <ul id="reasons-list" class="reasons-list hidden"></ul>
+
+      <!-- Educational X-Ray & Micro-Quiz -->
+      <details id="why-accordion" class="why-accordion hidden">
+        <summary id="why-summary" class="why-summary">How did we catch this?</summary>
+        <div class="why-body">
+          <div id="why-bullets"></div>
+          <div class="quiz-box" id="quiz-box">
+            <span class="quiz-heading" id="quiz-heading">🎯 Spot The Scam Challenge</span>
+            <p class="quiz-prompt" id="quiz-prompt"></p>
+            <div class="quiz-options-group" id="quiz-options-group" role="group"></div>
+            <div class="quiz-feedback-box hidden" id="quiz-feedback-box" role="status" aria-live="polite"></div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- Golden Safety Rule Box -->
+    <section class="golden-box" id="golden-box" aria-label="Golden Safety Rule">
+      <div class="golden-title" id="golden-title">Golden Safety Rule</div>
+      <p class="golden-text" id="golden-text">Stop and verify with your family or official customer care before clicking urgent links or making payments.</p>
+    </section>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p class="privacy-line" id="privacy-line">Everything is checked on your device. Nothing is uploaded.</p>
+      <p class="engine-note">Verity Bharat Shield · Pure On-Device Heuristics & Cyber Forensics Lab</p>
+    </footer>
+  </div>
+
+  <script type="module" src="scanner.js"></script>
+</body>
+</html>
