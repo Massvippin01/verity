@@ -1,0 +1,48 @@
+{
+  "name": "Verity Shield: Cyber Fraud Scanner",
+  "short_name": "Verity",
+  "description": "On-device Indian cyber fraud, WhatsApp scam, APK bytecode x-ray & live speakerphone guardian",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "./",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "files",
+          "accept": [
+            "application/vnd.android.package-archive",
+            "application/x-authorware-bin",
+            ".apk",
+            "application/pdf",
+            ".pdf",
+            "image/*",
+            "text/plain"
+          ]
+        }
+      ]
+    }
+  }
+}

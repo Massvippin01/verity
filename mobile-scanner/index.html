@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <meta name="theme-color" content="#0b0f19">
-  <meta name="description" content="Zero-install on-device Indian cyber fraud, WhatsApp scam, QR trap & APK forensics lab">
+  <meta name="description" content="Zero-install on-device Indian cyber fraud, WhatsApp scam, UPI QR trap & live website forensics lab">
   <title>Verity Shield: Citizen Cyber Lab</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -33,43 +33,41 @@
       </nav>
     </header>
 
-    <!-- 4-Tool Citizen Cyber Lab Navigation -->
+    <!-- 3 Core Shields Navigation -->
     <nav class="tool-nav" role="tablist" aria-label="Cyber Lab Tools">
-      <button type="button" role="tab" class="tool-tab-btn active" id="tab-btn-scanner" data-tool="scanner" aria-selected="true">
-        💬 Link & Chain
+      <button type="button" role="tab" class="tool-tab-btn active" id="tab-btn-website" data-tool="website" aria-selected="true">
+        🌐 Website Deep-Scanner
       </button>
-      <button type="button" role="tab" class="tool-tab-btn" id="tab-btn-qr" data-tool="qr" aria-selected="false">
-        📷 QR & UPI
+      <button type="button" role="tab" class="tool-tab-btn" id="tab-btn-message" data-tool="message" aria-selected="false">
+        💬 WhatsApp & SMS Scam
       </button>
-      <button type="button" role="tab" class="tool-tab-btn" id="tab-btn-file" data-tool="file" aria-selected="false">
-        📁 File & APK
+      <button type="button" role="tab" class="tool-tab-btn" id="tab-btn-payment" data-tool="payment" aria-selected="false">
+        💳 UPI & Payment Safety
       </button>
     </nav>
 
-    <!-- TOOL 1: Message, Link & Redirect Chain Scanner -->
-    <section id="panel-scanner" class="tool-panel" role="tabpanel" aria-labelledby="tab-btn-scanner">
+    <!-- SHIELD 1: Live Website & Redirect Deep-Scanner -->
+    <section id="panel-website" class="tool-panel" role="tabpanel" aria-labelledby="tab-btn-website">
       <div class="demo-section">
-        <span class="section-label">Demo Pre-sets</span>
-        <div class="chips-scroll" role="toolbar" aria-label="Sample scam scenarios">
-          <button type="button" class="chip-btn" data-demo="sbi_kyc">🏦 Fake SBI KYC</button>
-          <button type="button" class="chip-btn" data-demo="digital_arrest">👮 CBI Digital Arrest</button>
-          <button type="button" class="chip-btn" data-demo="olx_upi">💸 OLX UPI QR Trap</button>
-          <button type="button" class="chip-btn" data-demo="rto_apk">🚗 RTO Challan.apk</button>
-          <button type="button" class="chip-btn" data-demo="multihop_rotator">⛓️ Multi-Hop Rotator</button>
+        <span class="section-label">Website Scenario Simulations</span>
+        <div class="chips-scroll" role="toolbar" aria-label="Website Scenarios">
+          <button type="button" class="chip-btn" data-demo-web="compromised_cms">🚨 Hacked WordPress Phish</button>
+          <button type="button" class="chip-btn" data-demo-web="rotator_redirect">⛓️ Malvertising Redirect Chain</button>
+          <button type="button" class="chip-btn" data-demo-web="chatgpt_stripe">🟢 ChatGPT Plus Stripe (Safe)</button>
+          <button type="button" class="chip-btn" data-demo-web="official_sbi">🏦 Official SBI Portal (Safe)</button>
         </div>
       </div>
 
-      <textarea
-        id="scanner-textarea"
-        class="scanner-textarea"
-        rows="4"
-        maxlength="5000"
-        placeholder="Paste WhatsApp message, SMS or link here..."
-        aria-label="Paste message or link to scan"></textarea>
+      <input
+        type="url"
+        id="website-url-input"
+        class="scanner-input"
+        placeholder="Enter or paste website URL (e.g. https://...)"
+        aria-label="Enter website URL to scan">
 
       <div class="input-actions">
-        <button type="button" id="btn-check" class="btn-check">Check Link / Text</button>
-        <button type="button" id="btn-unroll" class="btn-secondary">Unroll Redirects</button>
+        <button type="button" id="btn-scan-website" class="btn-check">Deep-Scan Website & Online Identity</button>
+        <button type="button" id="btn-unroll-redirects" class="btn-secondary">Unroll Redirect Chain</button>
       </div>
 
       <!-- Hop-by-Hop Visual Redirect Trace -->
@@ -82,52 +80,68 @@
       </div>
     </section>
 
-    <!-- TOOL 2: QR Image / UPI Screenshot Inspector -->
-    <section id="panel-qr" class="tool-panel hidden" role="tabpanel" aria-labelledby="tab-btn-qr">
+    <!-- SHIELD 2: WhatsApp & SMS Scam Verifier -->
+    <section id="panel-message" class="tool-panel hidden" role="tabpanel" aria-labelledby="tab-btn-message">
       <div class="demo-section">
-        <span class="section-label">QR Test Simulations (Desktop)</span>
-        <div class="chips-scroll" role="toolbar" aria-label="QR Simulations">
-          <button type="button" class="chip-btn" data-demo-qr="olx_qr">💸 Simulate OLX QR Trap</button>
-          <button type="button" class="chip-btn" data-demo-qr="unsigned_p2p">⚠️ Unsigned P2P Collect</button>
-          <button type="button" class="chip-btn" data-demo-qr="safe_merchant">✅ Safe Merchant QR</button>
+        <span class="section-label">Message Scam Demos</span>
+        <div class="chips-scroll" role="toolbar" aria-label="Sample message scams">
+          <button type="button" class="chip-btn" data-demo-msg="digital_arrest">👮 CBI Digital Arrest Extortion</button>
+          <button type="button" class="chip-btn" data-demo-msg="sbi_kyc">🏦 Fake SBI KYC Account Block</button>
+          <button type="button" class="chip-btn" data-demo-msg="utility_bill">⚡ Electricity Disconnection Scam</button>
+          <button type="button" class="chip-btn" data-demo-msg="parcel_fraud">📦 India Post Delivery Failed</button>
         </div>
       </div>
+
+      <textarea
+        id="scanner-textarea"
+        class="scanner-textarea"
+        rows="4"
+        maxlength="5000"
+        placeholder="Paste suspicious WhatsApp message, SMS or text here..."
+        aria-label="Paste message or link to scan"></textarea>
+
+      <div class="input-actions">
+        <button type="button" id="btn-check" class="btn-check">Verify Message & Intent</button>
+      </div>
+    </section>
+
+    <!-- SHIELD 3: UPI QR & Payment Safety Verifier -->
+    <section id="panel-payment" class="tool-panel hidden" role="tabpanel" aria-labelledby="tab-btn-payment">
+      <div class="demo-section">
+        <span class="section-label">Payment Safety Demos</span>
+        <div class="chips-scroll" role="toolbar" aria-label="Payment scenarios">
+          <button type="button" class="chip-btn" data-demo-pay="olx_qr">💸 OLX UPI Receive Trap (Scam)</button>
+          <button type="button" class="chip-btn" data-demo-pay="illegal_pin">🔑 Illegal Web PIN Harvest (Scam)</button>
+          <button type="button" class="chip-btn" data-demo-pay="stripe_checkout">🟢 Stripe Checkout (Safe)</button>
+          <button type="button" class="chip-btn" data-demo-pay="merchant_qr">☕ Merchant Store QR (Safe)</button>
+        </div>
+      </div>
+
+      <input
+        type="text"
+        id="upi-intent-input"
+        class="scanner-input"
+        placeholder="Paste upi://pay link or payment page text..."
+        aria-label="UPI Intent or payment string">
 
       <div class="file-dropzone" id="qr-dropzone">
         <span class="dropzone-icon">📷</span>
         <span class="dropzone-text">Select QR Code / Payment Screenshot</span>
         <span class="dropzone-subtext">Uses offline on-device BarcodeDetector. Nothing leaves your phone.</span>
-        <input type="file" id="qr-file-input" accept="image/*" capture="environment" class="hidden">
+        <input type="file" id="qr-file-input" accept="image/*" class="hidden">
       </div>
-    </section>
 
-    <!-- TOOL 3: WhatsApp File & APK Magic-Byte Inspector -->
-    <section id="panel-file" class="tool-panel hidden" role="tabpanel" aria-labelledby="tab-btn-file">
-      <div class="demo-section">
-        <span class="section-label">Magic-Byte Simulations</span>
-        <div class="chips-scroll" role="toolbar" aria-label="Magic Byte Simulations">
-          <button type="button" class="chip-btn" data-demo-magic="spoofed_pdf">🚨 HDFC_Statement.pdf (MZ Binary)</button>
-          <button type="button" class="chip-btn" data-demo-magic="rto_apk">🚗 RTO_Challan.apk (PK Archive)</button>
-          <button type="button" class="chip-btn" data-demo-magic="safe_pdf">📄 syllabus.pdf (%PDF Clean)</button>
+      <div class="camera-scanner-wrap" style="margin-top: 10px;">
+        <button type="button" id="btn-toggle-camera" class="chip-btn" style="width: 100%; padding: 10px; font-weight: 600;">📷 Start Live Camera QR Scanner</button>
+        <div id="camera-viewfinder-container" class="hidden" style="margin-top: 10px; position: relative; border-radius: 12px; overflow: hidden; background: #000; text-align: center;">
+          <video id="camera-video-preview" playsinline style="width: 100%; max-height: 280px; object-fit: cover;"></video>
+          <canvas id="camera-frame-canvas" class="hidden"></canvas>
+          <div id="camera-status-overlay" style="padding: 8px; font-size: 13px; color: #fff; background: rgba(0,0,0,0.6);">Align UPI QR code inside camera view...</div>
         </div>
       </div>
 
-      <div class="file-dropzone" id="file-dropzone">
-        <span class="dropzone-icon">📁</span>
-        <span class="dropzone-text">Inspect WhatsApp File or .APK</span>
-        <span class="dropzone-subtext">Reads the first 8 bytes locally (File.slice) to catch double-extension and fake document malware 100% offline without opening the file.</span>
-        <input type="file" id="magic-file-input" class="hidden">
-      </div>
-
-      <div id="file-result-box" class="file-result-card hidden">
-        <div class="file-meta-row">
-          <span id="file-meta-name">Filename: -</span>
-          <span id="file-meta-size">- bytes</span>
-        </div>
-        <div class="file-meta-row">
-          <span>Magic Bytes:</span>
-          <span id="file-meta-hex" class="magic-bytes-code">00 00 00 00</span>
-        </div>
+      <div class="input-actions">
+        <button type="button" id="btn-scan-payment" class="btn-check">Verify Payment & UPI Safety</button>
       </div>
     </section>
 
@@ -144,6 +158,15 @@
       </div>
 
       <div id="upi-trap-banner" class="upi-trap-banner hidden"></div>
+
+      <!-- Online Keyless Intelligence Proof Steps -->
+      <div id="proof-steps-card" class="proof-steps-card hidden">
+        <div class="proof-steps-title">
+          <span>🛡️ Live Verification Proof Audit</span>
+        </div>
+        <div id="proof-steps-list" class="proof-steps-list"></div>
+      </div>
+
       <ul id="reasons-list" class="reasons-list hidden"></ul>
 
       <!-- Educational X-Ray & Micro-Quiz -->
@@ -170,7 +193,7 @@
     <!-- Footer -->
     <footer class="app-footer">
       <p class="privacy-line" id="privacy-line">Everything is checked on your device. Nothing is uploaded.</p>
-      <p class="engine-note">Verity Bharat Shield · Pure On-Device Heuristics & Cyber Forensics Lab</p>
+      <p class="engine-note">Verity Bharat Shield · Pure On-Device Heuristics & Keyless Public Online Intelligence</p>
     </footer>
   </div>
 

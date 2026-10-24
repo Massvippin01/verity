@@ -149,9 +149,9 @@ function isBrandMatchWithRemainder(hostname, term) {
           PHISHING_LURE_KEYWORDS.some(kw => part.includes(kw) || (kw.includes(part) && part.length >= 3))
         );
         const isNumericOrShortPrefix = /^[0-9]+$/.test(prefix) || (prefix.length === 1 && term.length >= 6);
-        const isInflectionSuffix = /^(?:er|app|apps)$/.test(suffix);
+        const isInflectionOrCombosquatSuffix = /^(?:er|app|apps|online|site|web|portal|login|auth|secure|pay|bank|direct|plus|pro|hub|pl|de|uk|in|us|fr|it|es|ca|au|nl|ch|at|se|no|fi|dk|cz|ro|gr|pt|ie|nz|sg|my|id|th|vn|ph|za|mx|ar|cl|co|ae|sa)$/i.test(suffix);
 
-        if (hasLure || isNumericOrShortPrefix || isInflectionSuffix) {
+        if (hasLure || isNumericOrShortPrefix || isInflectionOrCombosquatSuffix) {
           return true;
         }
       }
@@ -281,7 +281,10 @@ export function isTrustedTopDomain(hostname) {
     'dailymotion.com', 'twitch.tv', 'gmail.com', 'microsoft.com', 'login.microsoftonline.com',
     'live.com', 'office.com', 'apple.com', 'icloud.com', 'amazon.com',
     'facebook.com', 'meta.com', 'instagram.com', 'github.com', 'linkedin.com',
-    'twitter.com', 'x.com', 'netflix.com', 'paypal.com', 'stripe.com',
+    'twitter.com', 'x.com', 'netflix.com', 'paypal.com', 'stripe.com', 'stripe.network',
+    'razorpay.com', 'payu.in', 'payumoney.com', 'billdesk.com', 'ccavenue.com', 'cashfree.com',
+    'juspay.in', 'phonepe.com', 'paytm.com', 'npci.org.in', 'bhimupi.org.in', 'adyen.com',
+    'paddle.com', 'lemonsqueezy.com', 'openai.com', 'chatgpt.com', 'anthropic.com', 'claude.ai',
     'adobe.com', 'shopify.com', 'cloudflare.com', 'dropbox.com', 'zoom.us',
     'slack.com', 'atlassian.com', 'notion.so', 'wikipedia.org', 'yahoo.com',
     'bing.com', 'wordpress.com', 'reddit.com'
@@ -551,6 +554,29 @@ function calcLabelEntropy(str) {
   return ent;
 }
 
+const DGA_WORDS = new Set([
+  'if', 'it', 'can', 'not', 'cannot', 'were', 'filled', 'with', 'wit', 'wiggle', 'pop', 'loader',
+  'fast', 'track', 'load', 'free', 'get', 'best', 'online', 'top', 'click', 'live', 'game', 'play',
+  'down', 'soft', 'app', 'link', 'gate', 'ad', 'ads', 'box', 'hub', 'net', 'web', 'zone', 'drop',
+  'safe', 'sec', 'pay', 'view', 'media', 'stream', 'cloud', 'direct', 'push', 'traffic', 'server'
+]);
+
+function isConcatenatedDictionaryDGA(label) {
+  if (!label || label.length < 10) return false;
+  const l = label.toLowerCase().replace(/[^a-z]/g, '');
+  if (l.length < 10) return false;
+
+  let matches = 0;
+  let coveredChars = 0;
+  for (const w of DGA_WORDS) {
+    if (l.includes(w)) {
+      matches++;
+      coveredChars += w.length;
+    }
+  }
+  return matches >= 3 && coveredChars >= l.length * 0.7;
+}
+
 /**
  * Rule 5c: Random-looking hostname detection
  * @param {string} urlString
@@ -563,6 +589,10 @@ export function hasRandomLookingHostname(urlString) {
   }
 
   const hostname = url.hostname.toLowerCase();
+  if (isTrustedTopDomain(hostname) || isAllowlistedDomain(hostname)) {
+    return { id: null, params: {}, score: 0, reason: null, triggered: false };
+  }
+
   const safeLabels = new Set(['www', 'mail', 'api', 'cdn', 'static', 'assets', 'img', 'media', 'blog', 'shop', 'store', 'news', 'help', 'support', 'app', 'dev']);
   const parts = hostname.split('.');
   const labelsToCheck = parts.length > 1 ? parts.slice(0, -1) : parts;
@@ -600,6 +630,16 @@ export function hasRandomLookingHostname(urlString) {
         };
       }
 
+      if (isConcatenatedDictionaryDGA(tok)) {
+        return {
+          id: 'RULE_RANDOM_LOOKING_HOSTNAME',
+          params: { entropy: tok },
+          score: 65,
+          reason: t('RULE_RANDOM_LOOKING_HOSTNAME', { entropy: tok }),
+          triggered: true
+        };
+      }
+
       if (tok.length >= 10) {
         const vowels = (tok.match(/[aeiouy]/g) || []).length;
         const vowelRatio = vowels / tok.length;
@@ -615,7 +655,7 @@ export function hasRandomLookingHostname(urlString) {
           };
         }
 
-        if (entropy > 3.6 && suspTLDs.has(tld)) {
+        if (entropy > 3.6 && (suspTLDs.has(tld) || tok.length >= 12)) {
           return {
             id: 'RULE_RANDOM_LOOKING_HOSTNAME',
             params: { entropy: tok },

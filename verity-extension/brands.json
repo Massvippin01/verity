@@ -702,11 +702,15 @@
     "name": "Santander",
     "domains": [
       "santander.com",
-      "santander.co.uk"
+      "santander.co.uk",
+      "santander.pl",
+      "santanderbank.com"
     ],
     "variants": [
       "santander",
-      "santander-secure"
+      "santander-secure",
+      "santanderbank",
+      "santanderpl"
     ]
   },
   {
@@ -2213,6 +2217,73 @@
       "hmrc",
       "hmrc-tax-refund",
       "hmrc-gov-uk"
+    ]
+  },
+  {
+    "name": "iPKO",
+    "domains": [
+      "ipko.pl",
+      "pkobp.pl"
+    ],
+    "variants": [
+      "ipko",
+      "pkobp",
+      "pko-bp",
+      "ipkopl"
+    ]
+  },
+  {
+    "name": "mBank",
+    "domains": [
+      "mbank.pl"
+    ],
+    "variants": [
+      "mbank",
+      "mbankpl"
+    ]
+  },
+  {
+    "name": "ING",
+    "domains": [
+      "ing.pl",
+      "ing.com",
+      "ing.de"
+    ],
+    "variants": [
+      "ingbank",
+      "ing-bank",
+      "ingpl"
+    ]
+  },
+  {
+    "name": "Bank Millennium",
+    "domains": [
+      "bankmillennium.pl"
+    ],
+    "variants": [
+      "bankmillennium",
+      "millenniumbank"
+    ]
+  },
+  {
+    "name": "Alior Bank",
+    "domains": [
+      "aliorbank.pl"
+    ],
+    "variants": [
+      "aliorbank",
+      "alior"
+    ]
+  },
+  {
+    "name": "BNP Paribas",
+    "domains": [
+      "bnpparibas.pl",
+      "bnpparibas.com"
+    ],
+    "variants": [
+      "bnpparibas",
+      "bnp-paribas"
     ]
   }
 ]

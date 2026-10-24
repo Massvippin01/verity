@@ -181,6 +181,34 @@ export const SUPPORTED_LANGS = ['en-IN', 'hi-IN', 'ta-IN', 'te-IN'];
         goldenRule: 'గోల్డెన్ రూల్: వాట్సాప్ లేదా తెలియని సైట్‌ల నుండి వచ్చే APK ఫైల్‌లను ఎప్పుడూ ఇన్‌స్టాల్ చేయవద్దు.',
         helpline: HELPLINE_NUMBER
       }
+    },
+
+    // ── 7. Rogue Ad-Rotator / Malvertising Redirect ───────────────────────────
+    SIG_MALVERTISING_POPUP_NETWORK: {
+      'en-IN': {
+        title: 'Rogue Ad-Rotator / Malvertising Redirect Blocked',
+        explanation: 'A button or hidden script tried to silently bounce your browser through an ad-rotator or rogue redirect chain to an unverified website.',
+        goldenRule: 'Golden Rule: Close unexpected redirected tabs immediately. Never click "Allow" on surprise popups.',
+        helpline: HELPLINE_NUMBER
+      },
+      'hi-IN': {
+        title: 'अवांछित ऐड-रोटेटिंग और रीडायरेक्ट जाल रोका गया',
+        explanation: 'वेबसाइट के किसी बटन या स्क्रिप्ट ने आपके ब्राउज़र को किसी अज्ञात विज्ञापन या रीडायरेक्ट नेटवर्क पर भेजने की कोशिश की।',
+        goldenRule: 'गोल्डन नियम: अनचाहे खुले टैब को तुरंत बंद करें। अनजान पॉपअप पर कभी "Allow" न दबाएं।',
+        helpline: HELPLINE_NUMBER
+      },
+      'ta-IN': {
+        title: 'தேவையற்ற திசைதிருப்பல் / விளம்பர வலைப்பின்னல் தடுக்கப்பட்டது',
+        explanation: 'முந்தைய பக்கத்திலுள்ள பொத்தான் அல்லது ஸ்கிரிப்ட் உங்கள் உலாவியை சரிபார்க்கப்படாத விளம்பர தளத்திற்கு திருப்பிவிட முயன்றது.',
+        goldenRule: 'தங்க விதி: எதிர்பாராமல் திறக்கப்படும் பக்கங்களை உடனே மூடவும். "Allow" என்பதை அழுத்த வேண்டாம்.',
+        helpline: HELPLINE_NUMBER
+      },
+      'te-IN': {
+        title: 'అనవసరమైన రీడైరెక్ట్ / ప్రకటనల నెట్‌వర్క్ నిరోధించబడింది',
+        explanation: 'మునుపటి వెబ్‌సైట్‌లోని బటన్ లేదా స్క్రిప్ట్ మీ బ్రౌజర్‌ను ధృవీకరించని ప్రకటనల సైట్‌కు బలవంతంగా పంపడానికి ప్రయత్నించింది.',
+        goldenRule: 'గోల్డెన్ రూల్: అనుకోకుండా తెరుచుకునే ట్యాబ్‌లను వెంటనే మూసివేయండి. పాపప్‌లలో "Allow" నొక్కవద్దు.',
+        helpline: HELPLINE_NUMBER
+      }
     }
   };
 
@@ -221,7 +249,14 @@ export const SUPPORTED_LANGS = ['en-IN', 'hi-IN', 'ta-IN', 'te-IN'];
    */
   function getVernacularAdvisory(signalId, lang = 'en-IN') {
     const selectedLang = SUPPORTED_LANGS.includes(lang) ? lang : 'en-IN';
-    const signalData = ADVISORIES[signalId];
+    const effectiveSignal = (
+      signalId === 'SIG_CHAIN_HOP_REDIRECT' ||
+      signalId === 'SIG_FAST_FLUX_REDIRECT_LOOP' ||
+      signalId === 'SIG_ROGUE_POPUP_WINDOW_BLOCKED' ||
+      signalId === 'SIG_AD_ROTATOR_TRAFFIC' ||
+      signalId === 'SIG_UNVERIFIED_REDIRECT_TRAP'
+    ) ? 'SIG_MALVERTISING_POPUP_NETWORK' : signalId;
+    const signalData = ADVISORIES[effectiveSignal];
 
     if (signalData && signalData[selectedLang]) {
       return {

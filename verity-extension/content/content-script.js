@@ -533,9 +533,9 @@ const BHARAT_APK_LURE_KEYWORDS = [
 
 const BHARAT_DECEPTIVE_RECEIVE_LURES = [
   'receive cashback', 'claim reward', 'refund amount', 'scan to receive',
-  'olx buyer payment', 'lottery prize', 'receive payment', 'accept payment',
+  'olx buyer payment', 'lottery prize', 'money will be credited',
   'claim bonus', 'scan qr to get money', 'scan to credit', 'scan & receive',
-  'claim your refund', 'instant refund', 'cashback won', 'scan code to accept'
+  'claim your refund', 'instant refund', 'cashback won'
 ];
 
 function detectDigitalArrestAndApkScams(pageText = '', linkUrls = []) {
@@ -602,8 +602,22 @@ function detectUpiQrCollectTrap(domDocument) {
     textCorpus = '';
   }
 
+  // If page is clearly a legitimate checkout flow, UPI QR is expected and safe
+  const honestCheckoutPhrases = [
+    'authorize payment',
+    'scan this qr code using your preferred upi app',
+    'powered by stripe',
+    'powered by razorpay',
+    'pay ₹',
+    'billing address',
+    'order summary',
+    'total due',
+    'payment method'
+  ];
+  const hasHonestCheckout = honestCheckoutPhrases.some(phrase => textCorpus.includes(phrase));
+
   const matchedLure = BHARAT_DECEPTIVE_RECEIVE_LURES.find(lure => textCorpus.includes(lure));
-  if (!matchedLure) {
+  if (!matchedLure || hasHonestCheckout) {
     return { detected: false };
   }
 
@@ -1191,6 +1205,23 @@ function detectCrossOriginBrandAssetTheft(doc, currentHostname = '') {
     }
   } catch (_) {}
 
+  const AUTHORIZED_PAYMENT_GATEWAYS_REGEX = /(^|\.)(stripe\.com|stripe\.network|razorpay\.com|payu\.in|payumoney\.com|billdesk\.com|ccavenue\.com|cashfree\.com|juspay\.in|phonepe\.com|paytm\.com|bhimupi\.org\.in|npci\.org\.in|paypal\.com|braintreegateway\.com|adyen\.com|paddle\.com|lemonsqueezy\.com|polar\.sh|simpl\.xyz|pinelabs\.com|openai\.com|chatgpt\.com|anthropic\.com|claude\.ai|amazon\.in|amazon\.com|flipkart\.com|zomato\.com|swiggy\.com|irctc\.co\.in|bookmyshow\.com|makemytrip\.com)$/i;
+  if (AUTHORIZED_PAYMENT_GATEWAYS_REGEX.test(currentHost)) {
+    return { detected: false, leechedBrand: null, assetUrl: null };
+  }
+
+  // Extract page heading and title to verify if the site actually claims that brand identity
+  let pageHeadingOrTitle = '';
+  try {
+    const titleText = (documentNode.title || '').toLowerCase();
+    const h1Nodes = documentNode.querySelectorAll ? documentNode.querySelectorAll('h1') : [];
+    let h1Text = '';
+    for (let h = 0; h < h1Nodes.length; h++) {
+      h1Text += ' ' + (h1Nodes[h].innerText || h1Nodes[h].textContent || '');
+    }
+    pageHeadingOrTitle = `${titleText} ${h1Text}`.toLowerCase();
+  } catch (_) {}
+
   for (const rawUrl of candidates) {
     if (!rawUrl || typeof rawUrl !== 'string') continue;
     let assetHost = '';
@@ -1209,6 +1240,24 @@ function detectCrossOriginBrandAssetTheft(doc, currentHostname = '') {
       if (matchesAssetDomain) {
         const isCurrentHostOwnedByBrand = brand.officialDomains.some(d => currentHost === d || currentHost.endsWith('.' + d));
         if (!isCurrentHostOwnedByBrand) {
+          // Ignore payment method badge icons (paytm, phonepe, google pay, gpay, bhim, upi, visa, mastercard, stripe, razorpay)
+          // unless the page's <title> or <h1> explicitly claims to be that bank/brand's login portal on an untrusted domain
+          const PAYMENT_BADGE_KEYWORDS = [
+            'paytm', 'phonepe', 'google pay', 'gpay', 'bhim', 'upi',
+            'visa', 'mastercard', 'stripe', 'razorpay', 'payu', 'billdesk', 'cashfree'
+          ];
+          const isPaymentBadge = PAYMENT_BADGE_KEYWORDS.some(kw =>
+            brand.name.toLowerCase().includes(kw) || rawUrl.toLowerCase().includes(kw)
+          );
+
+          if (isPaymentBadge) {
+            const claimsBrandInHeaderOrTitle = brand.patterns.some(p => pageHeadingOrTitle.includes(p));
+            if (!claimsBrandInHeaderOrTitle) {
+              // Standard checkout payment badge - not brand impersonation
+              continue;
+            }
+          }
+
           return {
             detected: true,
             leechedBrand: brand.name,
@@ -1323,6 +1372,171 @@ function detectSensitiveInputTrap(inputValue, inputElement, isUntrustedContext) 
   }
 
   return { isSensitive: false, isTrap: false, type: null, honeyToken: null };
+}
+
+/**
+ * Universal Structural DOM Graph Phishing Detector
+ * Computes dead link ratios, external link escape ratios, cross-origin media parasitism,
+ * and form action isolation to catch cloned phishing templates on ANY domain or brand.
+ */
+function analyzeUniversalDomPhishGraph(docOrMetrics, currentHostname = '') {
+  const currentHost = (currentHostname || (typeof location !== 'undefined' ? location.hostname : '') || '').toLowerCase().replace(/^www\./, '');
+
+  function extractHost(urlStr, baseHost = '') {
+    if (!urlStr || typeof urlStr !== 'string') return '';
+    const trimmed = urlStr.trim();
+    if (trimmed.startsWith('//')) {
+      try { return new URL('https:' + trimmed).hostname.toLowerCase(); } catch (_) { return ''; }
+    }
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      try { return new URL(trimmed).hostname.toLowerCase(); } catch (_) { return ''; }
+    }
+    return baseHost ? baseHost.toLowerCase() : '';
+  }
+
+  function getBaseDomain(h) {
+    if (!h) return '';
+    const parts = h.split('.').filter(Boolean);
+    if (parts.length <= 2) return h;
+    return parts.slice(-2).join('.');
+  }
+
+  function areDifferentRoots(hostA, hostB) {
+    if (!hostA || !hostB) return false;
+    const a = hostA.toLowerCase();
+    const b = hostB.toLowerCase();
+    if (a === b) return false;
+    return getBaseDomain(a) !== getBaseDomain(b);
+  }
+
+  // Support direct metric objects
+  if (docOrMetrics && typeof docOrMetrics === 'object' && ('deadLinkRatio' in docOrMetrics || 'metrics' in docOrMetrics)) {
+    const m = docOrMetrics.metrics || docOrMetrics;
+    const deadLinkRatio = typeof m.deadLinkRatio === 'number' ? m.deadLinkRatio : 0;
+    const externalLinkRatio = typeof m.externalLinkRatio === 'number' ? m.externalLinkRatio : 0;
+    const externalMediaRatio = typeof m.externalMediaRatio === 'number' ? m.externalMediaRatio : 0;
+    const isFormOrphaned = !!m.isFormOrphaned;
+    const hasSensitiveInputs = !!(docOrMetrics.hasSensitiveInputs || docOrMetrics.hasPasswordInput || m.hasSensitiveInputs || m.hasPasswordInput);
+
+    const isCloneSignature = (deadLinkRatio >= 0.60 && (externalMediaRatio >= 0.50 || externalLinkRatio >= 0.50)) ||
+                             (isFormOrphaned && deadLinkRatio >= 0.55) ||
+                             (deadLinkRatio >= 0.70 && externalMediaRatio >= 0.40);
+
+    const detected = hasSensitiveInputs && isCloneSignature;
+    return {
+      detected,
+      confidenceScore: detected ? 85 : 0,
+      signal: detected ? 'SIG_UNIVERSAL_DOM_CLONE_PHISH' : null,
+      metrics: {
+        deadLinkRatio: Math.round(deadLinkRatio * 100) / 100,
+        externalLinkRatio: Math.round(externalLinkRatio * 100) / 100,
+        externalMediaRatio: Math.round(externalMediaRatio * 100) / 100,
+        isFormOrphaned,
+        totalLinks: m.totalLinks || 10,
+        totalMedia: m.totalMedia || 10
+      },
+      reason: detected ? `Universal structural clone anomaly: ${Math.round(deadLinkRatio * 100)}% dead navigation links with external assets and credential inputs.` : null
+    };
+  }
+
+  const doc = docOrMetrics || (typeof document !== 'undefined' ? document : null);
+  if (!doc || typeof doc.querySelectorAll !== 'function') {
+    return {
+      detected: false,
+      confidenceScore: 0,
+      signal: null,
+      metrics: { deadLinkRatio: 0, externalLinkRatio: 0, externalMediaRatio: 0, isFormOrphaned: false, totalLinks: 0, totalMedia: 0 },
+      reason: null
+    };
+  }
+
+  const anchors = doc.querySelectorAll('a[href]');
+  const totalLinks = anchors.length;
+  let deadLinkCount = 0;
+  let externalLinkCount = 0;
+
+  for (let i = 0; i < totalLinks; i++) {
+    const rawHref = anchors[i].getAttribute('href') || '';
+    const trimmed = rawHref.trim().toLowerCase();
+    const isDead = !trimmed ||
+      trimmed === '#' ||
+      trimmed === 'javascript:void(0)' ||
+      trimmed === 'javascript:;' ||
+      trimmed === 'javascript:void(0);' ||
+      trimmed.startsWith('javascript:void') ||
+      trimmed.startsWith('#') ||
+      trimmed === 'about:blank';
+
+    if (isDead) {
+      deadLinkCount++;
+    } else {
+      const linkHost = extractHost(rawHref, currentHost);
+      if (linkHost && areDifferentRoots(linkHost, currentHost)) {
+        externalLinkCount++;
+      }
+    }
+  }
+
+  const deadLinkRatio = totalLinks >= 4 ? (deadLinkCount / totalLinks) : 0;
+  const externalLinkRatio = totalLinks >= 4 ? (externalLinkCount / totalLinks) : 0;
+
+  const mediaElements = doc.querySelectorAll('img[src], link[rel*="stylesheet"][href], link[rel*="icon"][href]');
+  const totalMedia = mediaElements.length;
+  let externalMediaCount = 0;
+
+  for (let i = 0; i < totalMedia; i++) {
+    const el = mediaElements[i];
+    const srcOrHref = el.getAttribute('src') || el.getAttribute('href') || '';
+    const mediaHost = extractHost(srcOrHref, currentHost);
+    if (mediaHost && areDifferentRoots(mediaHost, currentHost)) {
+      externalMediaCount++;
+    }
+  }
+
+  const externalMediaRatio = totalMedia >= 3 ? (externalMediaCount / totalMedia) : 0;
+
+  const passInputs = doc.querySelectorAll('input[type="password"]');
+  const sensitiveInputs = doc.querySelectorAll('input[name*="pass" i], input[id*="pass" i], input[name*="pin" i], input[name*="otp" i], input[name*="card" i]');
+  const hasSensitiveInputs = passInputs.length > 0 || sensitiveInputs.length > 0;
+
+  let isFormOrphaned = false;
+  const forms = doc.querySelectorAll('form');
+  for (let i = 0; i < forms.length; i++) {
+    const form = forms[i];
+    const hasFormPass = form.querySelector('input[type="password"], input[name*="pass" i], input[name*="pin" i], input[name*="otp" i]');
+    if (hasFormPass) {
+      const rawAction = (form.getAttribute('action') || '').trim().toLowerCase();
+      const isDeadAction = !rawAction || rawAction === '#' || rawAction.startsWith('javascript:');
+      const isWebhookAction = rawAction.includes('formspree.io') || rawAction.includes('discord.com/api/webhooks') || rawAction.includes('api.telegram.org');
+      if (isDeadAction || isWebhookAction) {
+        if (deadLinkRatio >= 0.55 || (deadLinkRatio >= 0.40 && externalMediaRatio >= 0.50)) {
+          isFormOrphaned = true;
+          break;
+        }
+      }
+    }
+  }
+
+  const isCloneSignature = (deadLinkRatio >= 0.60 && (externalMediaRatio >= 0.50 || externalLinkRatio >= 0.50)) ||
+                           (isFormOrphaned && deadLinkRatio >= 0.55) ||
+                           (deadLinkRatio >= 0.70 && externalMediaRatio >= 0.40);
+
+  const detected = hasSensitiveInputs && isCloneSignature;
+
+  return {
+    detected,
+    confidenceScore: detected ? 85 : 0,
+    signal: detected ? 'SIG_UNIVERSAL_DOM_CLONE_PHISH' : null,
+    metrics: {
+      deadLinkRatio: Math.round(deadLinkRatio * 100) / 100,
+      externalLinkRatio: Math.round(externalLinkRatio * 100) / 100,
+      externalMediaRatio: Math.round(externalMediaRatio * 100) / 100,
+      isFormOrphaned,
+      totalLinks,
+      totalMedia
+    },
+    reason: detected ? `Universal structural clone anomaly: ${Math.round(deadLinkRatio * 100)}% dead navigation links with external assets and credential inputs.` : null
+  };
 }
 
 // 1. Signal Collection (Stage 1) - Gated, Lighter Scan
@@ -1556,7 +1770,13 @@ function collectSignals() {
     ? []
     : scanClaimedProviders(text);
 
+  // Universal Structural DOM Graph Phishing Detector (Phase 1)
+  const universalDomPhishGraph = (!isTrustedDomain && typeof analyzeUniversalDomPhishGraph === 'function')
+    ? analyzeUniversalDomPhishGraph(typeof document !== 'undefined' ? document : null, currentHostname)
+    : { detected: false, confidenceScore: 0, signal: null, metrics: { deadLinkRatio: 0, externalLinkRatio: 0, externalMediaRatio: 0, isFormOrphaned: false } };
+
   return {
+    universalDomPhishGraph,
     hasPasswordInput: isTrustedDomain ? false : hasPasswordInput,
     loginFormCount: isTrustedDomain ? 0 : loginForms.length,
     formActions,
@@ -1686,9 +1906,17 @@ function getSensitiveDomSignature() {
 }
 
 /**
- * Checks if a mutation added any <form>, <input>, or <iframe> elements.
+ * Checks if a mutation added or changed any <form>, <input>, password, OTP, PIN, or <iframe> elements.
  */
 function hasRelevantAddedNodes(mutation) {
+  if (mutation.type === 'attributes') {
+    const el = mutation.target;
+    if (el && el.nodeType === 1 && el.tagName === 'INPUT') {
+      const type = (el.getAttribute('type') || '').toLowerCase();
+      if (type === 'password' || type === 'number' || type === 'tel') return true;
+    }
+    return false;
+  }
   if (mutation.type !== 'childList' || !mutation.addedNodes) return false;
   for (let i = 0; i < mutation.addedNodes.length; i++) {
     const node = mutation.addedNodes[i];
@@ -1697,10 +1925,10 @@ function hasRelevantAddedNodes(mutation) {
       if (tag === 'form' || tag === 'input' || tag === 'iframe') {
         return true;
       }
-      if (node.querySelector && node.querySelector('form, input, iframe')) {
+      if (node.querySelector && node.querySelector('form, input, iframe, [name*="otp" i], [name*="pin" i], [name*="password" i]')) {
         return true;
       }
-      if (node.shadowRoot && node.shadowRoot.querySelector && node.shadowRoot.querySelector('form, input, iframe')) {
+      if (node.shadowRoot && node.shadowRoot.querySelector && node.shadowRoot.querySelector('form, input, iframe, [name*="otp" i], [name*="pin" i], [name*="password" i]')) {
         return true;
       }
     }
@@ -1709,7 +1937,7 @@ function hasRelevantAddedNodes(mutation) {
 }
 
 /**
- * Initializes a debounced (350ms) MutationObserver on document.documentElement.
+ * Initializes a debounced (150ms) MutationObserver on document.documentElement.
  * Watches childList and subtree for dynamically mounted sensitive form, input, or iframe elements (SPAs).
  */
 function initSpaMutationObserver() {
@@ -1746,14 +1974,16 @@ function initSpaMutationObserver() {
           lastKnownSensitiveSignature = currentSig;
           triggerFullScan();
         }
-      }, 350);
+      }, 150);
     }
   });
 
   try {
     spaMutationObserver.observe(target, {
       childList: true,
-      subtree: true
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['type', 'style', 'class']
     });
   } catch (e) {
     console.error('[Verity] Failed to attach SPA MutationObserver:', e);

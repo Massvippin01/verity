@@ -167,3 +167,40 @@ test('Popup Logic: formatScanResult formats pasted quick scanner outputs', () =>
   assert.equal(vm.plainReasons.length, 1);
   assert.equal(vm.plainReasons[0].includes('SIG_'), false);
 });
+
+test('Popup Logic: formatTabViewModel seamlessly handles calculateRisk return shape (lowercase action/severity, riskScore)', () => {
+  const tab = { id: 10, url: 'https://login.ipkopl.com/auth/login.php' };
+  // Exactly matching what calculateRisk returns:
+  const riskEngineVerdict = {
+    url: 'https://login.ipkopl.com/auth/login.php',
+    riskScore: 92,
+    score: 92,
+    severity: 'danger',
+    state: 'danger',
+    action: 'block',
+    signals: [
+      { id: 'SIG_AITM_REVERSE_PROXY_PHISH', score: 92 }
+    ],
+    reasons: ['AiTM reverse proxy detected']
+  };
+
+  const vm = formatTabViewModel(tab, riskEngineVerdict, 'en');
+  assert.equal(vm.status, 'danger', 'Must resolve to danger status');
+  assert.equal(vm.score, 92, 'Score must be 92');
+  assert.equal(vm.statusText, 'DANGER: SCAM DETECTED');
+  assert.equal(vm.domain, 'login.ipkopl.com');
+
+  // Also verify caution state with lowercase action
+  const warnVerdict = {
+    url: 'https://suspicious-shortener.click',
+    riskScore: 48,
+    action: 'warn',
+    severity: 'caution',
+    signals: [{ id: 'RULE_SUSPICIOUS_URL_PATTERN', score: 48 }]
+  };
+  const vmWarn = formatTabViewModel(tab, warnVerdict, 'en');
+  assert.equal(vmWarn.status, 'caution');
+  assert.equal(vmWarn.score, 48);
+  assert.equal(vmWarn.statusText, 'BE CAREFUL');
+});
+

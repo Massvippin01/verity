@@ -23,12 +23,15 @@ const THREAT_BULLETS = {
   SIG_ILLEGAL_WEB_PIN_COLLECTION: 'Asks for confidential bank/UPI PIN on an unverified web page.',
   SIG_DIGITAL_ARREST_EXTORTION: 'Fake police threats scaring you into video calls and fund transfers.',
   SIG_MALICIOUS_APK_DROPPER: 'Tries to download an unverified Android app (.apk) to steal SMS OTPs.',
-  SIG_UPI_QR_COLLECT_TRAP: 'Fake cashback lure to scan a QR code that deducts money.'
+  SIG_UPI_QR_COLLECT_TRAP: 'Fake cashback lure to scan a QR code that deducts money.',
+  SIG_MALVERTISING_POPUP_NETWORK: 'Unsolicited redirect or rogue ad-rotator network pushing unverified web pages.',
+  SIG_CHAIN_HOP_REDIRECT: 'Rogue redirect hop diverting your browser to a high-risk destination.'
 };
 
 let currentLang = 'en-IN';
 let suspectHost = 'suspicious-website.xyz';
 let suspectUrl = 'https://suspicious-website.xyz';
+let suspectReason = '';
 let activeSignal = 'SIG_PHISHING_KIT_WEBHOOK_EXFIL';
 let quizAnswered = false;
 
@@ -36,9 +39,10 @@ function detectThreatCategory(host, reason) {
   const c = ((host || '') + ' ' + (reason || '')).toLowerCase();
   if (c.includes('arrest') || c.includes('cbi') || c.includes('police') || c.includes('narcotics')) return 'SIG_DIGITAL_ARREST_EXTORTION';
   if (c.includes('apk') || c.includes('download') || c.includes('app')) return 'SIG_MALICIOUS_APK_DROPPER';
-  if (c.includes('pin') || c.includes('bank') || c.includes('kyc') || c.includes('sbi')) return 'SIG_ILLEGAL_WEB_PIN_COLLECTION';
+  if (c.includes('pin') || c.includes('upi pin') || c.includes('atm pin')) return 'SIG_ILLEGAL_WEB_PIN_COLLECTION';
   if (c.includes('qr') || c.includes('cashback') || c.includes('refund') || c.includes('olx')) return 'SIG_UPI_QR_COLLECT_TRAP';
   if (c.includes('clipboard') || c.includes('clickfix')) return 'SIG_CLICKFIX_CLIPBOARD_ATTACK';
+  if (c.includes('redirect') || c.includes('rotator') || c.includes('popunder') || c.includes('adware') || c.includes('malvertising') || c.includes('popup')) return 'SIG_MALVERTISING_POPUP_NETWORK';
   return 'SIG_PHISHING_KIT_WEBHOOK_EXFIL';
 }
 
@@ -115,7 +119,7 @@ function renderXRayCurriculum() {
     host: suspectHost,
     url: suspectUrl,
     signals: [{ id: activeSignal }],
-    reasons: [THREAT_BULLETS[activeSignal] || 'Suspected cyber fraud']
+    reasons: [suspectReason || THREAT_BULLETS[activeSignal] || 'Suspected cyber fraud']
   };
 
   const teaching = generateXRayTeachingCards(analysis, suspectUrl);
@@ -124,6 +128,9 @@ function renderXRayCurriculum() {
     while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
     const anatomy = parseUrlAnatomy(suspectUrl || suspectHost);
     const hostLow = suspectHost.toLowerCase();
+    const reasonLow = suspectReason.toLowerCase();
+    const isRedirect = hostLow.includes('rotator') || reasonLow.includes('redirect') || reasonLow.includes('rotator') || reasonLow.includes('popunder') || reasonLow.includes('adware') || activeSignal.includes('REDIRECT') || activeSignal.includes('POPUP') || activeSignal.includes('MALVERTISING');
+
     let matched = null;
     for (const [k, v] of Object.entries(LEGIT)) {
       if (hostLow.includes(k)) { matched = v; break; }
@@ -131,8 +138,8 @@ function renderXRayCurriculum() {
 
     const bullets = [
       matched ? `Real official website: ${matched[1]}. Fake site: ${anatomy.registeredDomain}.` : `Web address (${anatomy.registeredDomain}) is unverified and not official.`,
-      THREAT_BULLETS[activeSignal] || 'Secretly transmits entered credentials or OTPs to scammers.',
-      'Employs artificial panic or fake urgency to rush you before consulting family.'
+      THREAT_BULLETS[activeSignal] || (isRedirect ? 'Unsolicited redirect or ad-rotator network pushing unverified web pages.' : 'Secretly transmits entered credentials or OTPs to scammers.'),
+      isRedirect ? 'Blocked automatically to prevent forced downloads, rogue popups, or tracking.' : 'Employs artificial panic or fake urgency to rush you before consulting family.'
     ];
 
     bullets.forEach(b => {
@@ -202,6 +209,7 @@ function init() {
   const a = buildAnalysisFromParams(p);
   suspectHost = a.host;
   suspectUrl = a.url;
+  suspectReason = p.get('reason') || a.reasons?.[0]?.reason || '';
   activeSignal = a.signals[0]?.id || 'SIG_PHISHING_KIT_WEBHOOK_EXFIL';
 
   const nav = (typeof navigator !== 'undefined' && navigator.language ? navigator.language : '').toLowerCase();

@@ -27,9 +27,11 @@ import { detectTyposquatting } from '../background/brand-detector.js';
 import { calculateRisk } from '../background/risk-engine.js';
 import { detectDigitalArrestAndApkScams, normalizeEvasions } from '../content/bharat-scam-detectors.js';
 import { analyzeUpiIntentForensics } from './upi-forensics.js';
+import { analyzeRedirectChainForensics } from './redirect-forensics.js';
 import { goldenRuleForSignal } from './citizen-messages.js';
 import * as defaultPsl from './psl.js';
-import { analyzeRedirectChainForensics } from './redirect-forensics.js';
+import { classifyTextWithSubwordAi } from './ai-nlp-classifier.js';
+import { computeSecvIntentVector } from './secv-intent-engine.js';
 
 /**
  * Parses a upi://pay URI and inspects whether it represents a deceptive collect/deduct trap.
@@ -65,7 +67,7 @@ export function parseUpiString(str, contextText = '') {
     const combinedContext = `${contextText} ${str} ${tn} ${pn}`.toLowerCase();
     const collectLureKeywords = [
       'cashback', 'refund', 'receive', 'olx', 'buyer', 'advance',
-      'claim', 'bonus', 'prize', 'lottery', 'reward', 'accept',
+      'claim', 'bonus', 'prize', 'lottery', 'reward',
       'credit', 'credited', 'crediting', 'won', 'congratulations', 'gift',
       'रिफंड', 'कैशबैक', 'इनाम', 'पैसे प्राप्त', 'क्रेडिट', 'लॉटरी',
       'கேஷ்பேக்', 'பணம் பெற', 'பரிசு',
@@ -73,10 +75,34 @@ export function parseUpiString(str, contextText = '') {
     ];
 
     const hasLure = collectLureKeywords.some(kw => combinedContext.includes(kw));
+
+    const honestPhrases = [
+      'authorize payment',
+      'scan this qr code using your preferred upi app',
+      'powered by stripe',
+      'powered by razorpay',
+      'billing address',
+      'total due',
+      'order summary',
+      'pay ₹'
+    ];
+    const isHonestCheckout = honestPhrases.some(p => combinedContext.includes(p));
+    const explicitDeceptiveLures = [
+      'scan to receive',
+      'receive cashback',
+      'claim reward',
+      'get refund',
+      'prize money',
+      'olx buyer',
+      'money will be credited',
+      'cashback won'
+    ];
+    const hasExplicitDeceptiveLure = explicitDeceptiveLures.some(l => combinedContext.includes(l));
+
     // Deterministic NPCI UPI protocol forensic audit
     const forensics = analyzeUpiIntentForensics(rawUri, `${contextText} ${str}`);
     // If an amount is specified and context promises money received/cashback or NPCI flags forensic trap
-    const isCollect = !!(am && hasLure) || forensics.detected;
+    const isCollect = (!isHonestCheckout || hasExplicitDeceptiveLure) && ((!!(am && hasLure)) || forensics.detected);
 
     return {
       pa,
@@ -237,13 +263,35 @@ export function scanText(input, options = {}) {
     // ── 3. Deceptive UPI QR / Collect Trap (including Hinglish/Tanglish phrases) ─
     const qrColloquialRegex = /\b(?:qr scan karo|scan karke paise|scan karo.*paise|scan.*paise milega|qr.*aayega|cashback milega|refund aayega|scan pannunga|scan panna paise|scan cheyandi)\b/i;
     const upiForensics = analyzeUpiIntentForensics(rawText, rawText);
-    if ((upiData && upiData.isCollect) || qrColloquialRegex.test(normalizedText) || qrColloquialRegex.test(rawText)) {
+    const honestCheckoutPhrases = [
+      'authorize payment',
+      'scan this qr code using your preferred upi app',
+      'powered by stripe',
+      'powered by razorpay',
+      'billing address',
+      'total due',
+      'order summary',
+      'pay ₹'
+    ];
+    const hasHonestCheckoutInText = honestCheckoutPhrases.some(phrase => textLower.includes(phrase));
+    const explicitDeceptiveLuresInText = [
+      'scan to receive',
+      'receive cashback',
+      'claim reward',
+      'get refund',
+      'prize money',
+      'olx buyer',
+      'money will be credited'
+    ].some(l => textLower.includes(l));
+    const isSuppressedByHonestCheckout = hasHonestCheckoutInText && !explicitDeceptiveLuresInText;
+
+    if (!isSuppressedByHonestCheckout && ((upiData && upiData.isCollect) || qrColloquialRegex.test(normalizedText) || qrColloquialRegex.test(rawText))) {
       if (!signals.some(s => s.id === 'SIG_UPI_QR_COLLECT_TRAP')) {
         signals.push({ id: 'SIG_UPI_QR_COLLECT_TRAP', plainKey: 'SIG_UPI_QR_COLLECT_TRAP' });
       }
       maxScore = Math.max(maxScore, 85);
     }
-    if (upiForensics && upiForensics.detected) {
+    if (!isSuppressedByHonestCheckout && upiForensics && upiForensics.detected) {
       if (!signals.some(s => s.id === 'SIG_NPCI_UNSIGNED_COLLECT_FORENSIC')) {
         signals.unshift({ id: 'SIG_NPCI_UNSIGNED_COLLECT_FORENSIC', plainKey: 'SIG_NPCI_UNSIGNED_COLLECT_FORENSIC' });
       }
@@ -295,6 +343,39 @@ export function scanText(input, options = {}) {
         signals.push({ id: 'SIG_FAKE_PARCEL_DELIVERY_LURE', plainKey: 'SIG_FAKE_PARCEL_DELIVERY_LURE' });
       }
       maxScore = Math.max(maxScore, 80);
+    }
+
+    // ── 3e. 5D Psycholinguistic Coercion & Intent Vector Engine ──────────────
+    const secv = computeSecvIntentVector(rawText);
+    if (secv && secv.isConvergentScam) {
+      if (!signals.some(s => s.id === 'SIG_SECV_PSYCHOLINGUISTIC_CONVERGENCE')) {
+        signals.push({
+          id: 'SIG_SECV_PSYCHOLINGUISTIC_CONVERGENCE',
+          plainKey: 'SIG_SECV_PSYCHOLINGUISTIC_CONVERGENCE',
+          dominantAxis: secv.dominantAxis,
+          score: secv.score,
+          probability: secv.probability,
+          evidence: secv.evidence,
+          vector: secv.vector
+        });
+      }
+      maxScore = Math.max(maxScore, Math.max(85, secv.score));
+    }
+
+    // ── 3f. Subword N-Gram Bayesian NLP Continuous Inference ─────────────────
+    const aiNlp = classifyTextWithSubwordAi(rawText);
+    // Coercion/extortion requires extraction action (E > 0) to constitute an actionable fraud trap
+    const isCoercionWithoutExtraction = aiNlp.dominantClass === 'COERCION_EXTORTION' && secv && secv.vector.E === 0;
+    if (aiNlp.isScam && aiNlp.scamProbability >= 0.78 && !isCoercionWithoutExtraction) {
+      if (!signals.some(s => s.id === 'SIG_AI_NLP_SCAM_INTENT')) {
+        signals.push({
+          id: 'SIG_AI_NLP_SCAM_INTENT',
+          plainKey: 'SIG_AI_NLP_SCAM_INTENT',
+          dominantClass: aiNlp.dominantClass,
+          scamProbability: aiNlp.scamProbability
+        });
+      }
+      maxScore = Math.max(maxScore, Math.max(82, aiNlp.score));
     }
 
     // ── 4. URL Heuristics & Central Risk Engine Scoring ──────────────────────
@@ -377,6 +458,23 @@ export function scanText(input, options = {}) {
         };
       }
 
+      const hasAuthSub = ['login.', 'signin.', 'auth.', 'secure.', 'banking.', 'account.', 'verify.'].some(p => {
+        try { return new URL(normalizedUrl).hostname.toLowerCase().startsWith(p); } catch (_) { return false; }
+      });
+      const hasAuthPathEndpoint = ['/auth', '/login', '/signin', '/portal', '/verification', '/logon'].some(p => urlLower.includes(p)) && (urlLower.endsWith('.php') || urlLower.endsWith('.aspx') || urlLower.includes('/auth/') || urlLower.includes('/login'));
+      const hasBrandImpersonationRule = ruleSignals.some(s => s.id === 'RULE_BRAND_NAME_WRONG_DOMAIN' || s.id === 'RULE_BRAND_VARIANT_MATCH');
+
+      if ((hasAuthSub && hasAuthPathEndpoint) || (hasBrandImpersonationRule && (hasAuthSub || hasAuthPathEndpoint))) {
+        if (!domSignals) {
+          domSignals = {
+            hasCredentialCollection: true,
+            hasPasswordInput: true,
+            loginFormCount: 1,
+            pageTitle: 'Sign In'
+          };
+        }
+      }
+
       const verdict = calculateRisk(
         normalizedUrl,
         ruleSignals,
@@ -425,8 +523,10 @@ export function scanText(input, options = {}) {
         'SIG_FAKE_PARCEL_DELIVERY_LURE',
         'SIG_DECEPTIVE_SHORTENER_LURE',
         'SIG_KYC_CYBER_FRAUD',
+        'SIG_SECV_PSYCHOLINGUISTIC_CONVERGENCE',
         'SIG_FREE_HOST_CREDENTIAL_PHISH',
         'SIG_DOM_BRAND_IMPERSONATION',
+        'SIG_AUTONOMOUS_BRAND_IDENTITY_MISMATCH',
         'SIG_AITM_REVERSE_PROXY_PHISH',
         'RULE_BRAND_NAME_WRONG_DOMAIN',
         'SIG_TYPOSQUATTING',
@@ -434,7 +534,17 @@ export function scanText(input, options = {}) {
         'SIG_URL_SHORTENER_CAUTION'
       ];
       const matchedSignal = priorityOrder.find(id => signals.some(s => s.id === id));
-      goldenRuleKey = goldenRuleForSignal(matchedSignal || signals[0].id);
+      if (matchedSignal === 'SIG_SECV_PSYCHOLINGUISTIC_CONVERGENCE') {
+        const secvSig = signals.find(s => s.id === 'SIG_SECV_PSYCHOLINGUISTIC_CONVERGENCE');
+        if (secvSig && (secvSig.dominantAxis === 'authority' || secvSig.dominantAxis === 'catastrophic_threat')) {
+          goldenRuleKey = 'digital_arrest';
+        } else {
+          goldenRuleKey = 'otp_password';
+        }
+      } else {
+        const sigId = matchedSignal || (signals[0] && signals[0].id) || signals[0];
+        goldenRuleKey = goldenRuleForSignal(sigId);
+      }
     }
 
     return {
@@ -454,6 +564,8 @@ export function scanText(input, options = {}) {
         } : null),
         apkNames: extractedApkNames
       },
+      aiNlp,
+      secv,
       goldenRuleKey
     };
   } catch (_) {
@@ -624,9 +736,11 @@ export function unrollRedirectChainSimulation(inputUrlOrChain) {
 }
 
 export {
+  scanText as scanTextForScams,
   isUrlShortener,
   normalizeEvasions,
-  analyzeUpiIntentForensics
+  analyzeUpiIntentForensics,
+  classifyTextWithSubwordAi
 };
 
 export default {
@@ -636,5 +750,6 @@ export default {
   isUrlShortener,
   normalizeEvasions,
   analyzeUpiIntentForensics,
-  unrollRedirectChainSimulation
+  unrollRedirectChainSimulation,
+  classifyTextWithSubwordAi
 };

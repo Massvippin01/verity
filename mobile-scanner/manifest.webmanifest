@@ -1,7 +1,7 @@
 {
   "name": "Verity Shield: Cyber Fraud Scanner",
   "short_name": "Verity",
-  "description": "On-device Indian cyber fraud, WhatsApp scam & UPI trap scanner",
+  "description": "On-device Indian cyber fraud, WhatsApp scam, APK bytecode x-ray & live speakerphone guardian",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

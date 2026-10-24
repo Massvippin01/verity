@@ -25,12 +25,25 @@
   // ── Step 0: Trap Element.prototype.attachShadow to break closed ShadowDOM cloaking ──
   if (typeof Element !== 'undefined' && Element.prototype && Element.prototype.attachShadow) {
     const origAttachShadow = Element.prototype.attachShadow;
-    Element.prototype.attachShadow = function (init) {
-      if (init && init.mode === 'closed') {
-        init = Object.assign({}, init, { mode: 'open' }); // Force all shadow trees open for traversal
-      }
-      return origAttachShadow.call(this, init);
+    const origAttachShadowToString = Function.prototype.toString.bind(origAttachShadow);
+
+    const patchedAttachShadow = function attachShadow(init) {
+      const forcedInit = init ? Object.assign({}, init, { mode: 'open' }) : { mode: 'open' };
+      return origAttachShadow.call(this, forcedInit);
     };
+
+    try {
+      Object.defineProperty(patchedAttachShadow, 'name', { value: 'attachShadow', configurable: true });
+      Object.defineProperty(patchedAttachShadow, 'toString', {
+        value: function toString() {
+          return origAttachShadowToString();
+        },
+        configurable: true,
+        writable: true
+      });
+    } catch (_) {}
+
+    Element.prototype.attachShadow = patchedAttachShadow;
   }
 
   // Prevent multiple injections
@@ -109,6 +122,24 @@
         configurable: true
       });
     } catch (_) {}
+
+    // Wrap WebSocket.prototype.send to inspect outbound websocket frames
+    if (OrigWebSocket.prototype && !OrigWebSocket.prototype.__veritySendWrapped) {
+      const origSend = OrigWebSocket.prototype.send;
+      OrigWebSocket.prototype.send = function (data) {
+        if (typeof data === 'string') {
+          const lower = data.toLowerCase();
+          const hasCred = lower.includes('password') || lower.includes('passwd') || lower.includes('otp') || lower.includes('pin=') || lower.includes('cvv');
+          const isWebhookOrCrossExfil = lower.includes('api.telegram.org') || lower.includes('discord.com/api/webhooks') || lower.includes('webhook.site') || (this.url && isExfilEndpoint(this.url));
+          if (hasCred && isWebhookOrCrossExfil) {
+            notifyThreat('SIG_PHISHING_KIT_WEBHOOK_EXFIL', { endpoint: this.url || 'websocket_endpoint', payloadExcerpt: data.slice(0, 50) });
+            return; // Drop exfiltration packet
+          }
+        }
+        return origSend.apply(this, arguments);
+      };
+      OrigWebSocket.prototype.__veritySendWrapped = true;
+    }
 
     try {
       Object.defineProperty(WrappedWebSocket, '__verityWrapped', { value: true, configurable: true });

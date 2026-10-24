@@ -47,6 +47,20 @@ const coreFiles = [
   { src: 'content/crack-site-shield.js', dest: 'core/content/crack-site-shield.js' },
   { src: 'shared/redirect-forensics.js', dest: 'core/shared/redirect-forensics.js' },
   { src: 'shared/psl.js', dest: 'core/shared/psl.js' },
+  { src: 'content/structural-phish-graph.js', dest: 'core/content/structural-phish-graph.js' },
+  { src: 'background/rdap-sentinel.js', dest: 'core/background/rdap-sentinel.js' },
+  { src: 'shared/universal-behavior-guard.js', dest: 'core/shared/universal-behavior-guard.js' },
+  { src: 'shared/markov-lexical-scorer.js', dest: 'core/shared/markov-lexical-scorer.js' },
+  { src: 'shared/ai-nlp-classifier.js', dest: 'core/shared/ai-nlp-classifier.js' },
+  { src: 'background/online-free-intel.js', dest: 'core/background/online-free-intel.js' },
+  { src: 'shared/payment-gateway-allowlist.js', dest: 'core/shared/payment-gateway-allowlist.js' },
+  { src: 'background/compromised-site-detector.js', dest: 'core/background/compromised-site-detector.js' },
+  { src: 'content/search-shield.js', dest: 'core/content/search-shield.js' },
+  { src: 'shared/apk-bytecode-analyzer.js', dest: 'core/shared/apk-bytecode-analyzer.js' },
+  { src: 'shared/live-call-guardian.js', dest: 'core/shared/live-call-guardian.js' },
+  { src: 'shared/online-scam-verifier.js', dest: 'core/shared/online-scam-verifier.js' },
+  { src: 'shared/secv-intent-engine.js', dest: 'core/shared/secv-intent-engine.js' },
+  { src: 'shared/autonomous-brand-discovery.js', dest: 'core/shared/autonomous-brand-discovery.js' },
   { src: 'brands.json', dest: 'core/brands.json' }
 ];
 
@@ -159,6 +173,9 @@ export {
   detectDefaultLang
 } from './shared/citizen-messages.js';
 export { generateXRayTeachingCards, parseUrlAnatomy } from './shared/xray-educator.js';
+export { verifyUrlAndMessageOnline, verifyEntityOfficialDomainOnline } from './shared/online-scam-verifier.js';
+export { computeSecvIntentVector, normalizeVernacularPhonetics } from './shared/secv-intent-engine.js';
+export { verifyAutonomousBrandIdentity, auditDomainDmarcPosture, extractAssertedDomIdentity } from './shared/autonomous-brand-discovery.js';
 `;
 
 const textScannerReExport = `export * from './shared/text-scanner.js';\nexport { default } from './shared/text-scanner.js';\n`;
@@ -180,7 +197,9 @@ for (const targetBase of targets) {
     const srcPath = path.resolve(extensionRoot, item.src);
     const destPath = path.resolve(targetBase, item.dest);
     fs.mkdirSync(path.dirname(destPath), { recursive: true });
-    fs.copyFileSync(srcPath, destPath);
+    if (fs.existsSync(srcPath)) {
+      fs.copyFileSync(srcPath, destPath);
+    }
   }
 
   // 2. Vendor tldts

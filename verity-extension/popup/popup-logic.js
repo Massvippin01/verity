@@ -99,21 +99,30 @@ export function formatTabViewModel(tab, verdict, lang = 'en', date = new Date())
     };
   }
 
-  const score = typeof verdict?.score === 'number' ? Math.min(Math.max(verdict.score, 0), 100) : 0;
+  const rawScore = (typeof verdict?.score === 'number')
+    ? verdict.score
+    : ((typeof verdict?.riskScore === 'number')
+      ? verdict.riskScore
+      : (typeof verdict?.verdict?.score === 'number' ? verdict.verdict.score : 0));
+  const score = Math.min(Math.max(rawScore, 0), 100);
+
   const rawSignals = Array.isArray(verdict?.signals)
     ? verdict.signals.map(s => typeof s === 'string' ? s : s?.id).filter(Boolean)
-    : [];
+    : (Array.isArray(verdict?.verdict?.signals) ? verdict.verdict.signals.map(s => typeof s === 'string' ? s : s?.id).filter(Boolean) : []);
+
+  const action = String(verdict?.action || verdict?.verdict?.action || '').toUpperCase();
+  const severity = String(verdict?.severity || verdict?.state || verdict?.verdict?.severity || verdict?.verdict?.state || '').toUpperCase();
 
   let status = 'safe';
-  if (score >= 70 || verdict?.action === 'BLOCK' || verdict?.severity === 'CRITICAL' || verdict?.severity === 'HIGH') {
+  if (score >= 70 || action === 'BLOCK' || severity === 'DANGER' || severity === 'CRITICAL' || severity === 'HIGH') {
     status = 'danger';
-  } else if (score >= 35 || verdict?.action === 'WARN' || verdict?.severity === 'MEDIUM' || verdict?.severity === 'LOW') {
+  } else if (score >= 35 || action === 'WARN' || severity === 'CAUTION' || severity === 'MEDIUM' || severity === 'LOW') {
     status = 'caution';
   }
 
   const plainReasons = status === 'safe'
     ? []
-    : resolvePlainReasons(verdict?.signals || verdict?.reasons, eff, status === 'danger' ? 3 : 2);
+    : resolvePlainReasons(verdict?.signals || verdict?.reasons || verdict?.verdict?.reasons, eff, status === 'danger' ? 3 : 2);
 
   let goldenRuleKey = (status !== 'safe' && rawSignals.length > 0)
     ? goldenRuleForSignal(rawSignals[0])
@@ -152,23 +161,41 @@ export function formatScanResult(scanResult, lang = 'en') {
     };
   }
 
-  const status = scanResult.verdict || 'safe';
+  const rawScore = (typeof scanResult.score === 'number')
+    ? scanResult.score
+    : ((typeof scanResult.riskScore === 'number')
+      ? scanResult.riskScore
+      : (typeof scanResult.verdict?.score === 'number' ? scanResult.verdict.score : 0));
+  const score = Math.min(Math.max(rawScore, 0), 100);
+
+  let rawStatus = typeof scanResult.verdict === 'string'
+    ? scanResult.verdict
+    : (scanResult.verdict?.state || scanResult.verdict?.severity || scanResult.status || 'safe');
+  const statusStr = String(rawStatus).toLowerCase();
+
+  let status = 'safe';
+  if (score >= 70 || statusStr === 'danger' || statusStr === 'block') {
+    status = 'danger';
+  } else if (score >= 35 || statusStr === 'caution' || statusStr === 'warn') {
+    status = 'caution';
+  }
+
   const plainReasons = status === 'safe'
     ? []
-    : resolvePlainReasons(scanResult.signals, eff, status === 'danger' ? 3 : 2);
+    : resolvePlainReasons(scanResult.signals || scanResult.verdict?.reasons, eff, status === 'danger' ? 3 : 2);
   const goldenRuleKey = scanResult.goldenRuleKey || 'generic';
   const rawSignals = Array.isArray(scanResult.signals) ? scanResult.signals.map(s => s.id || s) : [];
 
   return {
     status,
     statusText: STATUS[eff]?.[status] || STATUS.en[status],
-    score: scanResult.score || 0,
+    score,
     plainReasons,
     goldenRuleKey,
     goldenRuleTitle: UI[eff]?.goldenRuleTitle || UI.en.goldenRuleTitle,
     goldenRuleText: GOLDEN_RULES[goldenRuleKey]?.[eff] || GOLDEN_RULES[goldenRuleKey]?.en || GOLDEN_RULES.generic.en,
     extracted: scanResult.extracted || { urls: [], upi: null, apkNames: [] },
-    advancedDetails: `Verdict: ${status.toUpperCase()} (${scanResult.score || 0}/100)\nURLs: ${scanResult.extracted?.urls?.join(', ') || 'None'}\nAPKs: ${scanResult.extracted?.apkNames?.join(', ') || 'None'}\nUPI: ${scanResult.extracted?.upi ? (scanResult.extracted.upi.isCollect ? 'Trap' : 'Normal') : 'None'}\nSignals: ${rawSignals.join(', ') || 'None'}`,
+    advancedDetails: `Verdict: ${status.toUpperCase()} (${score}/100)\nURLs: ${scanResult.extracted?.urls?.join(', ') || 'None'}\nAPKs: ${scanResult.extracted?.apkNames?.join(', ') || 'None'}\nUPI: ${scanResult.extracted?.upi ? (scanResult.extracted.upi.isCollect ? 'Trap' : 'Normal') : 'None'}\nSignals: ${rawSignals.join(', ') || 'None'}`,
     rawSignals
   };
 }

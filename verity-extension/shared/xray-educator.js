@@ -49,7 +49,7 @@
   function detectPsychologicalTrigger(analysisResult = {}) {
     const signals = analysisResult.signals || [];
     const reasons = analysisResult.reasons || [];
-    const corpus = (signals.map(s => s.id || s).join(' ') + ' ' + reasons.join(' ')).toLowerCase();
+    const corpus = (signals.map(s => s.id || s).join(' ') + ' ' + reasons.map(r => r.reason || r).join(' ')).toLowerCase();
 
     // 1. Fear & False Authority
     if (corpus.includes('digital_arrest') || corpus.includes('police') || corpus.includes('cbi') || corpus.includes('customs') || corpus.includes('kyc_cyber_fraud') || corpus.includes('warrant')) {
@@ -84,22 +84,37 @@
       };
     }
 
-    // Default: Deceptive Familiarity (Brand Impersonation)
+    // 4. Forced Redirect / Ad-Rotator Network (User-redirected ad network scenario)
+    if (corpus.includes('redirect') || corpus.includes('rotator') || corpus.includes('popunder') || corpus.includes('adware') || corpus.includes('popup') || corpus.includes('malvertising') || corpus.includes('chain_hop')) {
+      return {
+        type: 'FORCED_REDIRECT_NETWORK',
+        title: 'Attacker Tactic: Forced Ad-Rotator Redirect',
+        badge: 'Forced Navigation Trap',
+        explanation: 'A button or hidden script hijacked your click to silently bounce your browser through an ad-rotator or rogue redirect chain to an unverified website.',
+        countermeasure: 'Do not click anywhere inside the redirected page, and do not accept notification or software download prompts. Close the tab immediately.'
+      };
+    }
+
+    // Default: Deceptive Familiarity & Unverified Domain
     return {
       type: 'DECEPTIVE_FAMILIARITY',
-      title: 'Attacker Psychology: Deceptive Brand Spoofing',
-      badge: 'Impersonation Tactic',
-      explanation: 'The attacker creates a replica of a familiar banking, government, or social media login page to exploit your visual trust.',
-      countermeasure: 'Look at the address bar, not the website design. Anyone can copy a logo, but nobody can duplicate an official registered domain.'
+      title: 'Attacker Psychology: Deceptive Brand & Domain Spoofing',
+      badge: 'Impersonation / Spoofing Tactic',
+      explanation: 'Scammers use unverified domains, deceptive subdomains, or copied visual themes to trick users into trusting an unauthorized website.',
+      countermeasure: 'Look at the address bar, not the website design. Anyone can copy a design or buy an untrusted domain, but only the registered domain dictates the true owner.'
     };
   }
 
   function generateContextualQuiz(analysisResult = {}, anatomy = {}) {
     const signals = analysisResult.signals || [];
-    const corpus = signals.map(s => s.id || s).join(' ').toLowerCase();
+    const reasons = analysisResult.reasons || [];
+    const corpus = (
+      signals.map(s => s.id || s).join(' ') + ' ' +
+      reasons.map(r => r.reason || r).join(' ')
+    ).toLowerCase();
 
-    // Digital Arrest Quiz
-    if (corpus.includes('digital_arrest')) {
+    // 1. Digital Arrest Quiz
+    if (corpus.includes('digital_arrest') || corpus.includes('police') || corpus.includes('cbi')) {
       return {
         question: 'A WhatsApp video caller in police uniform claims your Aadhaar is tied to a narcotics parcel and demands ₹50,000 for "verification bail". What should you do?',
         options: [
@@ -113,7 +128,7 @@
       };
     }
 
-    // UPI QR Code Trap Quiz
+    // 2. UPI QR Code Trap Quiz
     if (corpus.includes('upi') || corpus.includes('qr') || corpus.includes('pin')) {
       return {
         question: 'An online buyer sends you a QR code saying: "Scan this and enter your UPI PIN to claim your ₹5,000 payment". What will actually happen?',
@@ -128,8 +143,8 @@
       };
     }
 
-    // Malicious APK Quiz
-    if (corpus.includes('apk') || corpus.includes('download')) {
+    // 3. Malicious APK Quiz
+    if (corpus.includes('apk') || corpus.includes('download') || corpus.includes('.exe')) {
       return {
         question: 'You receive an SMS saying your electricity will be disconnected tonight unless you download "Electricity_Bill.apk". What is the safest action?',
         options: [
@@ -143,17 +158,68 @@
       };
     }
 
-    // Default URL / Phishing Quiz
+    // 4. Rogue Redirects / Ad Rotators / Malvertising Quiz (The user's exact case)
+    if (corpus.includes('redirect') || corpus.includes('rotator') || corpus.includes('popunder') || corpus.includes('adware') || corpus.includes('malvertising') || corpus.includes('popup') || corpus.includes('chain_hop')) {
+      return {
+        question: `You clicked a button or link, and it unexpectedly redirected to "${anatomy.hostname || anatomy.registeredDomain || 'an unfamiliar site'}". What is the safest action?`,
+        options: [
+          'Close the redirected page immediately without clicking or downloading anything',
+          'Click "Allow" or "Accept" if prompted for notification or browser permissions',
+          'Follow the page instructions to install recommended software updates',
+          'Enter your mobile number or email to proceed to your intended destination'
+        ],
+        correctIndex: 0,
+        explanation: 'Ad-rotator networks and rogue redirects silently divert clicks to push scams, unwanted software, or fake alerts. Closing the unexpected tab immediately keeps your browser safe.'
+      };
+    }
+
+    // 5. Brand Impersonation (ONLY when a specific brand was actually detected!)
+    let detectedBrand = analysisResult.brand || analysisResult.detectedBrand || null;
+    if (!detectedBrand) {
+      const brandMatch = corpus.match(/impersonating ["']?([^"']+)["']?|claims to be ["']?([^"']+)["']?/i);
+      if (brandMatch) detectedBrand = brandMatch[1] || brandMatch[2];
+    }
+
+    if (detectedBrand) {
+      return {
+        question: `This website claims to be "${detectedBrand}", but the browser address is "https://${anatomy.hostname}". Who owns this website?`,
+        options: [
+          `The official ${detectedBrand} company or organization`,
+          `The owner of "${anatomy.registeredDomain}", which is an unauthorized third party`,
+          'Your internet service provider',
+          'The Government of India'
+        ],
+        correctIndex: 1,
+        explanation: `Anyone can copy the logo or name of "${detectedBrand}", but the registered domain "${anatomy.registeredDomain}" proves this is an unauthorized clone.`
+      };
+    }
+
+    // 6. Subdomain Deception Quiz (if subdomains exist, e.g. login.verify.trap.org)
+    if (anatomy.subdomains && anatomy.subdomains !== 'www') {
+      return {
+        question: `In the web address "https://${anatomy.hostname}", which part determines who actually owns and operates this website?`,
+        options: [
+          `The prefix subdomains ("${anatomy.subdomains}") at the start`,
+          `The registered root domain ("${anatomy.registeredDomain}") at the end`,
+          'The "https://" secure connection padlock',
+          'Whichever brand logo is displayed on the page'
+        ],
+        correctIndex: 1,
+        explanation: `Scammers can prefix deceptive words as subdomains, but only the registered root domain ("${anatomy.registeredDomain}") dictates true ownership.`
+      };
+    }
+
+    // 7. General Unverified Domain Quiz (e.g. werefilledwit.org with no subdomains and no brand)
     return {
-      question: `You receive a link "https://sbi.verify-account.${anatomy.registeredDomain || 'fake-bank.xyz'}". Who owns this website?`,
+      question: `You were directed to "https://${anatomy.registeredDomain || 'an-unknown-domain.org'}". How can you know if an unfamiliar website is genuine?`,
       options: [
-        'State Bank of India, because "sbi" appears in the beginning',
-        'Your local bank branch manager',
-        `The owner of "${anatomy.registeredDomain || 'fake-bank.xyz'}", who could be an anonymous scammer`,
-        'The Government of India'
+        'Trust it if it displays a green lock icon or HTTPS in the address bar',
+        'Verify the web address through official channels before entering any details',
+        'Trust it if it promises fast downloads or instant rewards',
+        'Assume it is safe because your browser opened it without an error'
       ],
-      correctIndex: 2,
-      explanation: `Subdomains like "sbi." can be freely created by anyone who owns "${anatomy.registeredDomain || 'fake-bank.xyz'}". The final registered domain dictates the true owner.`
+      correctIndex: 1,
+      explanation: `Anyone can register an inexpensive domain like "${anatomy.registeredDomain || 'this site'}" with free HTTPS encryption. Always verify addresses independently.`
     };
   }
 

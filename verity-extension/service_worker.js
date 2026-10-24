@@ -129,6 +129,7 @@ async function analyzeUrl(url) {
     hasAffiliateTrackerPattern(url),
     hasPiracyOrUnverifiedMediaPattern(url),
     hasAitmProxyUrlSignature(url),
+    hasHomographAttack(url, brandsList),
   ];
 
   return ruleSignals;
@@ -862,8 +863,22 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
     }
   }
 
-  // Subframe rule: only enforce if dangerous (block threshold) to avoid disturbing clean embeds
-  if (frameId !== 0 && quickVerdict.action !== 'block') {
+  // Pre-Navigation Block Shield: For top-level navigations flagged as BLOCK,
+  // halt the dangerous navigation before network requests leave the browser
+  // and redirect the tab directly to Verity's Bharat Shield block page.
+  if (frameId === 0 && quickVerdict.action === 'block' && !isUserOverridden(tabId, url)) {
+    await storeAndEnforce(tabId, quickVerdict, frameId);
+    if (chrome.tabs && chrome.tabs.update) {
+      let host = url;
+      try { host = new URL(url).hostname; } catch (_) {}
+      const blockUrl = chrome.runtime.getURL(
+        `ui/blocked.html?url=${encodeURIComponent(url)}&host=${encodeURIComponent(host)}&reason=${encodeURIComponent(quickVerdict.reasons[0] || 'Dangerous page blocked for your protection')}&signal=${encodeURIComponent(quickVerdict.signals?.[0]?.id || '')}`
+      );
+      try {
+        await chrome.tabs.update(tabId, { url: blockUrl });
+        return;
+      } catch (_) {}
+    }
     return;
   }
 
@@ -1339,11 +1354,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     const tabKey = targetTabId.toString();
     const numTabId = typeof targetTabId === 'string' ? parseInt(targetTabId, 10) : targetTabId;
-    const memVerdict = tabRiskState.has(numTabId) ? tabRiskState.get(numTabId) : null;
+    const tabState = tabRiskStates.has(numTabId) ? tabRiskStates.get(numTabId) : null;
+    const memVerdict = tabState?.lastVerdict || null;
 
     if (chrome.storage && chrome.storage.session) {
-      chrome.storage.session.get(tabKey).then(async (result) => {
-        let storedVerdict = result ? result[tabKey] : null;
+      const stateKey = 'tab_risk_state_' + numTabId;
+      chrome.storage.session.get([tabKey, stateKey]).then(async (result) => {
+        let storedVerdict = result ? (result[tabKey] || result[stateKey]?.lastVerdict) : null;
         if (!storedVerdict && memVerdict) {
           storedVerdict = memVerdict;
         }

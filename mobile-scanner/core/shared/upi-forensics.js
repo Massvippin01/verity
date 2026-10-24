@@ -73,13 +73,39 @@ export const CONSUMER_PSP_HANDLES = [
  * Deceptive keywords claiming that funds will be received, credited, or won.
  */
 export const DECEPTIVE_CONTEXT_KEYWORDS = [
-  'cashback', 'refund', 'receive', 'olx', 'buyer', 'advance',
-  'claim', 'bonus', 'prize', 'lottery', 'reward', 'accept',
-  'credit', 'credited', 'crediting', 'won', 'congratulations', 'gift',
-  'verify', 'kyc', 'reactivate', 'unlock',
-  'रिफंड', 'कैशबैक', 'इनाम', 'पैसे प्राप्त', 'क्रेडिट', 'लॉटरी',
+  'cashback', 'refund', 'scan to receive', 'olx buyer', 'buyer advance',
+  'claim reward', 'claim prize', 'claim bonus', 'lottery prize', 'reward money',
+  'money will be credited', 'amount credited', 'won prize', 'congratulations won',
+  'scan code to accept', 'scan to accept',
+  'रिफंड', 'कैशबैक', 'इनाम', 'पैसे प्राप्त', 'लॉटरी',
   'கேஷ்பேக்', 'பணம் பெற', 'பரிசு',
   'క్యాష్‌బ్యాక్', 'డబ్బు పొందండి', 'బహుమతి'
+];
+
+/**
+ * Standard phrases that indicate a legitimate checkout / payment flow.
+ */
+export const HONEST_PAYMENT_PHRASES = [
+  'authorize payment',
+  'scan this qr code using your preferred upi app',
+  'scan this qr code with your upi app',
+  'powered by stripe',
+  'powered by razorpay',
+  'powered by payu',
+  'powered by billdesk',
+  'billing address',
+  'order summary',
+  'total due',
+  'pay with upi',
+  'pay via upi',
+  'pay ₹',
+  'pay rs',
+  'total payable',
+  'amount to pay',
+  'upi is supported in multiple apps',
+  'to pay for your order',
+  'pay for your order',
+  'for your order'
 ];
 
 /**
@@ -181,7 +207,8 @@ export function analyzeUpiIntentForensics(upiUriString, surroundingText = '') {
 
     // Check C: Deceptive Note / Context
     const combinedContext = `${surroundingText} ${tn} ${pn}`.toLowerCase();
-    const hasDeceptiveNoteOrContext = DECEPTIVE_CONTEXT_KEYWORDS.some(k => combinedContext.includes(k));
+    const hasHonestPaymentContext = HONEST_PAYMENT_PHRASES.some(phrase => combinedContext.includes(phrase));
+    const hasDeceptiveNoteOrContext = !hasHonestPaymentContext && DECEPTIVE_CONTEXT_KEYWORDS.some(k => combinedContext.includes(k));
     if (hasDeceptiveNoteOrContext) {
       redFlags.push('DECEPTIVE_LURE_MISMATCH: Payer is promised incoming credit/refund, but protocol enforces account deduction');
     }
@@ -201,8 +228,10 @@ export function analyzeUpiIntentForensics(upiUriString, surroundingText = '') {
 
     // 3. Verdict Synthesis
     const isSignedMerchant = !isUnsignedP2P && !!sign;
-    const isFraudulent = (isUnsignedP2P && hasHardcodedDebitAmount && (hasDeceptiveNoteOrContext || hasSuspiciousVpaHandle)) ||
-                         (hasSuspiciousVpaHandle && hasHardcodedDebitAmount);
+    const isFraudulent = !hasHonestPaymentContext && (
+      (isUnsignedP2P && hasHardcodedDebitAmount && (hasDeceptiveNoteOrContext || hasSuspiciousVpaHandle)) ||
+      (hasSuspiciousVpaHandle && hasHardcodedDebitAmount)
+    );
 
     return {
       detected: isFraudulent,

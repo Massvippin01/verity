@@ -10,6 +10,7 @@
 'use strict';
 
 import { analyzeUpiIntentForensics } from '../shared/upi-forensics.js';
+import { isAuthorizedPaymentGatewayOrMerchant, isLegitimateCheckoutFlow } from '../shared/payment-gateway-allowlist.js';
 
   // ── Digital Arrest Extortion Patterns ─────────────────────────────────────
   const LAW_ENFORCEMENT_LURES = [
@@ -101,8 +102,9 @@ import { analyzeUpiIntentForensics } from '../shared/upi-forensics.js';
     'scan to receive',
     'olx buyer payment',
     'lottery prize',
-    'receive payment',
-    'accept payment',
+    'scan to receive payment',
+    'scan code to accept',
+    'scan to accept',
     'claim bonus',
     'scan qr to get money',
     'scan to credit',
@@ -110,7 +112,6 @@ import { analyzeUpiIntentForensics } from '../shared/upi-forensics.js';
     'claim your refund',
     'instant refund',
     'cashback won',
-    'scan code to accept',
     // Hinglish & Tanglish lures
     'qr scan karo',
     'scan karke paise',
@@ -381,6 +382,41 @@ import { analyzeUpiIntentForensics } from '../shared/upi-forensics.js';
       textCorpus = normalizeEvasions(rawText).toLowerCase();
     } catch (_) {
       textCorpus = '';
+    }
+
+    // Check for honest checkout context (Stripe, Razorpay, PayU, standard e-commerce)
+    let currentUrl = '';
+    try {
+      currentUrl = doc.location?.href || (typeof window !== 'undefined' ? window.location?.href : '') || '';
+    } catch (_) {}
+
+    if (currentUrl && (isAuthorizedPaymentGatewayOrMerchant(currentUrl) || isLegitimateCheckoutFlow(currentUrl, textCorpus))) {
+      const matchedLure = DECEPTIVE_RECEIVE_LURES.find(lure => textCorpus.includes(lure));
+      if (!matchedLure) {
+        return { detected: false };
+      }
+    }
+
+    const honestCheckoutPhrases = [
+      'authorize payment',
+      'scan this qr code using your preferred upi app',
+      'scan this qr code with your upi app',
+      'powered by stripe',
+      'powered by razorpay',
+      'powered by payu',
+      'powered by billdesk',
+      'billing address',
+      'order summary',
+      'total due',
+      'subscribe',
+      'checkout',
+      'to pay for your order',
+      'pay for your order',
+      'upi is supported in multiple apps'
+    ];
+    const hasHonestCheckout = honestCheckoutPhrases.some(phrase => textCorpus.includes(phrase));
+    if (hasHonestCheckout) {
+      return { detected: false };
     }
 
     // Check for deceptive receive-money lures

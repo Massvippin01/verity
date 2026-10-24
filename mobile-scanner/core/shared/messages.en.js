@@ -128,6 +128,32 @@
     SIG_FILE_MAGIC_BYTE_SPOOF: (p) => `Critical threat: Executable binary disguised as a document or media file (${p?.fileName || 'disguised file'}).`,
     SIG_ARCHIVE_DISGUISED_AS_DOC: (p) => `Critical threat: Archive or APK dropper disguised as a document (${p?.fileName || 'disguised archive'}).`,
 
+    // ── Universal Domain-Agnostic Signals (Phases 1-4) ────────────────────────
+    SIG_UNIVERSAL_DOM_CLONE_PHISH: (p) => 'Critical phishing threat: Cloned website structure detected with dead navigation anchors and credential harvesting inputs.',
+    SIG_UNIVERSAL_NRD_CREDENTIAL_TRAP: (p) => `Critical threat: Newly registered domain (${p?.ageDays !== undefined ? p.ageDays + ' days old' : '< 14 days old'}) requesting sensitive citizen credentials.`,
+    SIG_NEWLY_REGISTERED_DOMAIN_CAUTION: (p) => `Advisory: Domain was registered very recently (${p?.ageDays !== undefined ? p.ageDays + ' days old' : '< 14 days old'}). Exercise caution with downloads or purchases.`,
+    SIG_UNIVERSAL_CLIPBOARD_MISMATCH: (p) => 'Critical threat: Silent clipboard hijacking detected replacing copied text with an untrusted command, URL, or payment address.',
+    SIG_CROSS_ORIGIN_PASSWORD_REUSE_TRAP: (p) => `Critical threat: Zero-Knowledge origin protection detected credential reuse on an untrusted third-party domain${p?.originalOrigin ? ' (registered to ' + p.originalOrigin + ')' : ''}.`,
+
+    // ── Hybrid Online Free Intel & Neural AI Signals ──────────────────────────
+    SIG_CT_LOG_EPHEMERAL_CERT_PHISH: (p) => `Critical threat: Ephemeral TLS certificate (${p?.earliestCertAgeDays !== undefined ? p.earliestCertAgeDays + ' days old' : '< 7 days old'}) detected on a page requesting sensitive credentials.`,
+    SIG_DNS_CNAME_CLOAKING_DETECTED: (p) => `Critical infrastructure threat: Domain uses DNS CNAME cloaking (${p?.cnameTarget || 'tunnel'}) to conceal real hosting servers.`,
+    SIG_AI_NLP_SCAM_INTENT: (p) => `Critical scam intent: Subword Bayesian NLP detected deceptive social engineering or financial coercion intent (${p?.dominantClass || 'Scam'}).`,
+    SIG_NEURAL_META_FUSION_PHISH: (p) => `Critical threat: Multi-layer neural network fusion detected zero-day structural phishing patterns (${p?.score || 90}/100 confidence).`,
+    SIG_ONLINE_ENTITY_DOMAIN_MISMATCH: (p) => `Public entity verification mismatch: "${p?.entity || 'Entity'}" official domain is "${p?.officialDomain || 'official domain'}", but current site is "${p?.candidateHostname || p?.currentDomain || 'unverified domain'}".`,
+    SIG_SECV_PSYCHOLINGUISTIC_CONVERGENCE: (p) => `Critical cyber fraud: Multidimensional psycholinguistic coercion detected (${p?.dominantAxis || 'Coercion'} force convergence: authority, urgency, and extraction).`,
+    SIG_AUTONOMOUS_BRAND_IDENTITY_MISMATCH: (p) => `Critical brand impersonation: Self-asserted brand identity "${p?.brand || 'Institutional Brand'}" has zero domain alignment with this unverified site.`,
+    SIG_PHISHSTATS_LIVE_FEED_HIT: (p) => `Active threat intelligence: Domain is currently listed on public phishing database (${p?.database || 'PhishStats live feed'}).`,
+    SIG_MISSING_DMARC_CREDENTIAL_TRAP: (p) => `Cryptographic DNS violation: Domain claiming institutional identity lacks a valid DMARC policy while harvesting sensitive credentials.`,
+
+    // ── Bitdefender-Parity & Mobile Sensors Signals (Phases 1-4) ─────────────
+    SIG_COMPROMISED_CMS_HOST_PHISH: (p) => `Critical threat: Phishing kit detected inside compromised CMS/server directory (${p?.reasons || 'malicious deep-path injection'}).`,
+    SIG_SERP_SPONSORED_IMPERSONATION: (p) => `High risk search impersonation: Sponsored ad or result claiming to be an official brand or helpline on an unverified domain (${p?.matchedBrand || 'Brand'}).`,
+    SIG_APK_TROJAN_BYTECODE_DETECTED: (p) => `Critical mobile trojan: Android APK bytecode contains spyware, SMS OTP interception, or Accessibility RAT capabilities (${p?.summary || 'malicious capabilities'}).`,
+    SIG_LIVE_CALL_REMOTE_ACCESS_TRAP: (p) => 'Critical live call extortion: Caller demanding installation of AnyDesk/TeamViewer or remote screen sharing.',
+    SIG_LIVE_CALL_DIGITAL_ARREST: (p) => 'Critical live call extortion: Scammer impersonating police, CBI, or customs officer threatening digital arrest.',
+    SIG_LIVE_CALL_OTP_HARVEST: (p) => 'Critical live call trap: Caller attempting to coerce secret banking OTP or UPI PIN entry.',
+
     // ── Download Interceptor Signals ──────────────────────────────────────────
     DOWNLOAD_CHROME_DANGEROUS: (p) => 'Chrome identified this file as dangerous.',
     SIG_HTML_SMUGGLING_DOWNLOAD: (p) => `High risk: HTML smuggling detected (blob/data URI download from unverified origin "${p?.source || 'external'}").`,
@@ -282,11 +308,13 @@
     RULE_PIRACY_MEDIA: 'url',
     SIG_URL_SUSPICIOUS: 'url',
     SIG_NEWLY_REGISTERED_DOMAIN: 'url',
+    SIG_NEWLY_REGISTERED_DOMAIN_CAUTION: 'url',
     SIG_URL_SHORTENER_CAUTION: 'url',
 
     // Category: ip_host (high-confidence network track)
     RULE_IP_BASED_URL: 'ip_host',
     SIG_IP_HOST: 'ip_host',
+    SIG_DNS_CNAME_CLOAKING_DETECTED: 'ip_host',
 
     // Category: malvertising
     RULE_MALVERTISING_REDIRECT: 'malvertising',
@@ -316,9 +344,13 @@
     SIG_FREE_HOST_CREDENTIAL_PHISH: 'brand_impersonation',
     SIG_DOM_BRAND_IMPERSONATION: 'brand_impersonation',
     SIG_CROSS_ORIGIN_BRAND_ASSET_THEFT: 'brand_impersonation',
+    SIG_SERP_SPONSORED_IMPERSONATION: 'brand_impersonation',
+    SIG_ONLINE_ENTITY_DOMAIN_MISMATCH: 'brand_impersonation',
+    SIG_AUTONOMOUS_BRAND_IDENTITY_MISMATCH: 'brand_impersonation',
 
     // Category: ml
     SIG_ML_PHISHING: 'ml',
+    SIG_NEURAL_META_FUSION_PHISH: 'ml',
 
     // Category: dom_credentials
     SIG_CREDENTIAL_COLLECTION: 'dom_credentials',
@@ -329,6 +361,11 @@
     PAYMENT_OTP_UNVERIFIED: 'dom_credentials',
     SIG_CANVAS_CREDENTIAL_FORM: 'dom_credentials',
     SIG_REALTIME_KEYLOGGER_HONEYTOKEN_TRIPPED: 'dom_credentials',
+    SIG_UNIVERSAL_DOM_CLONE_PHISH: 'dom_credentials',
+    SIG_UNIVERSAL_NRD_CREDENTIAL_TRAP: 'dom_credentials',
+    SIG_CROSS_ORIGIN_PASSWORD_REUSE_TRAP: 'dom_credentials',
+    SIG_COMPROMISED_CMS_HOST_PHISH: 'dom_credentials',
+    SIG_LIVE_CALL_OTP_HARVEST: 'dom_credentials',
 
     // Category: scam_language
     SIG_SCAM_LANGUAGE: 'scam_language',
@@ -348,6 +385,11 @@
     SIG_FAKE_PARCEL_DELIVERY_LURE: 'scam_language',
     SIG_SURVEILLANCE_EXTORTION_TRAP: 'scam_language',
     SIG_ARCHIVE_PASSWORD_STEALER_LURE: 'scam_language',
+    SIG_UNIVERSAL_CLIPBOARD_MISMATCH: 'scam_language',
+    SIG_AI_NLP_SCAM_INTENT: 'scam_language',
+    SIG_SECV_PSYCHOLINGUISTIC_CONVERGENCE: 'scam_language',
+    SIG_LIVE_CALL_REMOTE_ACCESS_TRAP: 'scam_language',
+    SIG_LIVE_CALL_DIGITAL_ARREST: 'scam_language',
 
     // Category: payment_phishing
     PAYMENT_FAKE_PROVIDER: 'payment_phishing',
@@ -376,6 +418,7 @@
     SIG_MALICIOUS_APK_DROPPER: 'download',
     SIG_FILE_MAGIC_BYTE_SPOOF: 'download',
     SIG_ARCHIVE_DISGUISED_AS_DOC: 'download',
+    SIG_APK_TROJAN_BYTECODE_DETECTED: 'download',
     DOWNLOAD_EXECUTABLE: 'download',
     DOWNLOAD_SCRIPT: 'download',
     DOWNLOAD_INSTALLER: 'download',
@@ -399,7 +442,10 @@
     SIG_UNTRUSTED_SCREEN_SHARE: 'threat_intel',
     SIG_FREE_HOSTING_CREDENTIAL_TRAP: 'threat_intel',
     SIG_EVASION_TECHNIQUE_DETECTED: 'threat_intel',
-    SIG_CROSS_ORIGIN_CREDENTIAL_POST: 'threat_intel'
+    SIG_CROSS_ORIGIN_CREDENTIAL_POST: 'threat_intel',
+    SIG_CT_LOG_EPHEMERAL_CERT_PHISH: 'threat_intel',
+    SIG_PHISHSTATS_LIVE_FEED_HIT: 'threat_intel',
+    SIG_MISSING_DMARC_CREDENTIAL_TRAP: 'threat_intel'
   };
 
   /**

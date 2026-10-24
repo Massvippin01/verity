@@ -19,6 +19,7 @@ const currentSiteIndicator = $('current-site-indicator');
 const currentSiteStatus = $('current-site-status');
 const currentSiteDomain = $('current-site-domain');
 const currentSiteScore = $('current-site-score');
+const currentSiteMeter = $('current-site-meter');
 const currentSiteReasons = $('current-site-reasons');
 const labelQuickChecker = $('label-quick-checker');
 const checkerInput = $('checker-input');
@@ -28,6 +29,7 @@ const scanResultCard = $('scan-result-card');
 const scanIndicator = $('scan-indicator');
 const scanStatus = $('scan-status');
 const scanScoreSub = $('scan-score-sub');
+const scanMeter = $('scan-meter');
 const scanReasons = $('scan-reasons');
 const scanWhyDetails = $('scan-why-details');
 const scanWhySummary = $('scan-why-summary');
@@ -37,6 +39,13 @@ const goldenText = $('golden-text');
 const privacyNote = $('privacy-note');
 const btnToggleAdvanced = $('btn-toggle-advanced');
 const advancedPre = $('advanced-pre');
+
+const STATUS_ICONS = {
+  safe: `<svg class="status-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>`,
+  caution: `<svg class="status-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  danger: `<svg class="status-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+  neutral: `<svg class="status-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`
+};
 
 async function loadBrandsDataset() {
   if (cachedBrands.length > 0) return cachedBrands;
@@ -67,7 +76,11 @@ function updateStaticTranslations() {
   }
   setT(btnCheck, UI[currentLang]?.checkButton || UI.en.checkButton);
   setT(privacyNote, UI[currentLang]?.privacyLine || UI.en.privacyLine);
-  setT(btnToggleAdvanced, UI[currentLang]?.advancedDetails || UI.en.advancedDetails);
+  if (btnToggleAdvanced) {
+    const span = btnToggleAdvanced.querySelector('span');
+    if (span) { span.textContent = UI[currentLang]?.advancedDetails || UI.en.advancedDetails; }
+    else { btnToggleAdvanced.textContent = UI[currentLang]?.advancedDetails || UI.en.advancedDetails; }
+  }
   setT(scanWhySummary, UI[currentLang]?.whyTitle || UI.en.whyTitle);
 }
 
@@ -76,7 +89,7 @@ function renderCurrentSiteCard() {
   if (headerStatusDot) headerStatusDot.className = 'status-dot dot-' + vm.status;
   if (currentSiteCard) currentSiteCard.className = 'traffic-card card-' + vm.status;
   if (currentSiteIndicator) {
-    currentSiteIndicator.textContent = vm.status === 'safe' ? '🟢' : vm.status === 'caution' ? '🟡' : vm.status === 'danger' ? '🔴' : '⚪';
+    currentSiteIndicator.innerHTML = STATUS_ICONS[vm.status] || STATUS_ICONS.neutral;
   }
   if (currentSiteStatus) {
     currentSiteStatus.textContent = vm.statusText;
@@ -84,13 +97,16 @@ function renderCurrentSiteCard() {
   }
   if (currentSiteDomain) currentSiteDomain.textContent = vm.domain || 'Unknown';
   if (currentSiteScore) currentSiteScore.textContent = `${vm.score}/100`;
+  if (currentSiteMeter) {
+    currentSiteMeter.style.width = `${Math.min(Math.max(vm.score, 0), 100)}%`;
+  }
 
   if (currentSiteReasons) {
     while (currentSiteReasons.firstChild) currentSiteReasons.removeChild(currentSiteReasons.firstChild);
     if (vm.plainReasons.length > 0) {
       currentSiteReasons.classList.remove('hidden');
       vm.plainReasons.forEach(txt => {
-        const li = createSafeElement('li', `❌ ${txt}`);
+        const li = createSafeElement('li', `⚠️ ${txt}`);
         li.setAttribute('lang', currentLang);
         currentSiteReasons.appendChild(li);
       });
@@ -110,16 +126,25 @@ function renderScanResult(scanResult) {
   scanResultCard.className = 'traffic-card card-' + vm.status;
   scanResultCard.classList.remove('hidden');
 
-  scanIndicator.textContent = vm.status === 'safe' ? '🟢' : vm.status === 'caution' ? '🟡' : '🔴';
-  scanStatus.textContent = vm.statusText;
-  scanStatus.setAttribute('lang', currentLang);
-  scanScoreSub.textContent = `Score: ${vm.score}/100`;
+  if (scanIndicator) {
+    scanIndicator.innerHTML = STATUS_ICONS[vm.status] || STATUS_ICONS.neutral;
+  }
+  if (scanStatus) {
+    scanStatus.textContent = vm.statusText;
+    scanStatus.setAttribute('lang', currentLang);
+  }
+  if (scanScoreSub) {
+    scanScoreSub.textContent = `Score: ${vm.score}/100`;
+  }
+  if (scanMeter) {
+    scanMeter.style.width = `${Math.min(Math.max(vm.score, 0), 100)}%`;
+  }
 
   while (scanReasons.firstChild) scanReasons.removeChild(scanReasons.firstChild);
   if (vm.plainReasons.length > 0) {
     scanReasons.classList.remove('hidden');
     vm.plainReasons.forEach(txt => {
-      const li = createSafeElement('li', `❌ ${txt}`);
+      const li = createSafeElement('li', `⚠️ ${txt}`);
       li.setAttribute('lang', currentLang);
       scanReasons.appendChild(li);
     });
@@ -197,24 +222,63 @@ async function init() {
   }
 
   if (typeof chrome !== 'undefined' && chrome.tabs?.query) {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       if (tabs && tabs[0]) {
         activeTab = tabs[0];
         if (isInternalUrl(activeTab.url)) {
           renderCurrentSiteCard();
         } else {
-          chrome.runtime.sendMessage(
-            { action: 'GET_TAB_VERDICT', tabId: activeTab.id },
-            (resp) => {
-              if (resp?.verdict) activeVerdict = resp.verdict;
-              renderCurrentSiteCard();
-            }
-          );
+          // Instant hydration from session storage (zero latency)
+          if (chrome.storage?.session) {
+            try {
+              const tabKey = activeTab.id.toString();
+              const stateKey = 'tab_risk_state_' + activeTab.id;
+              const res = await chrome.storage.session.get([tabKey, stateKey]);
+              if (res?.[tabKey]) {
+                activeVerdict = res[tabKey];
+                renderCurrentSiteCard();
+              } else if (res?.[stateKey]?.lastVerdict) {
+                activeVerdict = res[stateKey].lastVerdict;
+                renderCurrentSiteCard();
+              }
+            } catch (_) {}
+          }
+
+          // Authoritative message query to service worker (triggers cold-start scan if needed)
+          try {
+            chrome.runtime.sendMessage(
+              { action: 'GET_TAB_VERDICT', tabId: activeTab.id },
+              (resp) => {
+                if (chrome.runtime?.lastError) return;
+                if (resp?.verdict) {
+                  activeVerdict = resp.verdict;
+                  renderCurrentSiteCard();
+                }
+              }
+            );
+          } catch (_) {}
         }
       } else {
         renderCurrentSiteCard();
       }
     });
+
+    // Reactive live listener: updates verdict and score immediately if background finishes
+    if (chrome.storage?.onChanged) {
+      chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName === 'session' && activeTab) {
+          const tabKey = activeTab.id.toString();
+          const stateKey = 'tab_risk_state_' + activeTab.id;
+          if (changes[tabKey]?.newValue) {
+            activeVerdict = changes[tabKey].newValue;
+            renderCurrentSiteCard();
+          } else if (changes[stateKey]?.newValue?.lastVerdict) {
+            activeVerdict = changes[stateKey].newValue.lastVerdict;
+            renderCurrentSiteCard();
+          }
+        }
+      });
+    }
   } else {
     renderCurrentSiteCard();
   }

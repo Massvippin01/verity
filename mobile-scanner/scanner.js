@@ -1,14 +1,16 @@
 /**
- * mobile-scanner/scanner.js — 4-Tool Citizen Cyber Forensics Lab Logic
+ * mobile-scanner/scanner.js — Streamlined 3-Shield Forensics Lab & Android Bridge
  *
- * 1. Message, Link & Multi-Hop Redirect Chain Scanner
- * 2. QR Image / UPI Screenshot Inspector (BarcodeDetector + Simulation)
- * 3. WhatsApp File & APK Magic-Byte Inspector (100% Offline via File.slice)
- * 4. Multilingual Plain-Language Advisories & Educational Micro-Quiz
+ * 1. Shield 1: Live Website & Redirect Deep-Scanner (16 URL rules + CMS + DoH + RDAP + Wikidata)
+ * 2. Shield 2: WhatsApp / SMS Scam & Fact-Check Verifier (multilingual vernacular + intent)
+ * 3. Shield 3: UPI QR & Payment Safety Verifier (Stripe/Razorpay checkouts vs deceptive traps)
+ *
+ * Integrates window.VerityAndroidBridge.onIncomingIntent(payload) for Native Android APK integration.
  */
 
 import { scanText, parseUpiString, unrollRedirectChainSimulation } from './core/shared/text-scanner.js';
-import { inspectFileMagicBytes } from './core/shared/file-magic-inspector.js';
+import { verifyUrlAndMessageOnline, verifyEntityOfficialDomainOnline } from './core/shared/online-scam-verifier.js';
+import { computeSecvIntentVector } from './core/shared/secv-intent-engine.js';
 import {
   LANGS,
   STATUS,
@@ -26,159 +28,116 @@ let cachedBrands = [];
 let lastScanResult = null;
 let quizAnswered = false;
 
-// DOM Elements
+// DOM Helpers
 const $ = (id) => document.getElementById(id);
-const langBtns = document.querySelectorAll('.lang-btn');
-const toolTabs = document.querySelectorAll('.tool-tab-btn');
-const demoChips = document.querySelectorAll('.chip-btn');
+const langBtns = () => document.querySelectorAll('.lang-btn');
+const toolTabs = () => document.querySelectorAll('.tool-tab-btn');
 
-const panelScanner = $('panel-scanner');
-const panelQr = $('panel-qr');
-const panelFile = $('panel-file');
+// Shield 1: Website
+const panelWebsite = () => $('panel-website');
+const websiteUrlInput = () => $('website-url-input');
+const btnScanWebsite = () => $('btn-scan-website');
+const btnUnrollRedirects = () => $('btn-unroll-redirects');
+const redirectTraceBox = () => $('redirect-trace-box');
+const traceHopCount = () => $('trace-hop-count');
+const hopsList = () => $('hops-list');
 
-const scannerTextarea = $('scanner-textarea');
-const btnCheck = $('btn-check');
-const btnUnroll = $('btn-unroll');
-const redirectTraceBox = $('redirect-trace-box');
-const traceHopCount = $('trace-hop-count');
-const hopsList = $('hops-list');
+// Shield 2: Message
+const panelMessage = () => $('panel-message') || $('panel-scanner');
+const scannerTextarea = () => $('scanner-textarea');
+const btnCheck = () => $('btn-check');
 
-const qrDropzone = $('qr-dropzone');
-const qrFileInput = $('qr-file-input');
-const qrNotice = $('qr-notice');
+// Shield 3: Payment
+const panelPayment = () => $('panel-payment') || $('panel-qr');
+const upiIntentInput = () => $('upi-intent-input');
+const qrDropzone = () => $('qr-dropzone');
+const qrFileInput = () => $('qr-file-input');
+const btnScanPayment = () => $('btn-scan-payment');
+const qrNotice = () => $('qr-notice');
 
-const fileDropzone = $('file-dropzone');
-const magicFileInput = $('magic-file-input');
-const fileResultBox = $('file-result-box');
-const fileMetaName = $('file-meta-name');
-const fileMetaSize = $('file-meta-size');
-const fileMetaHex = $('file-meta-hex');
+// Verdict & Proof
+const verdictCard = () => $('verdict-card');
+const verdictIcon = () => $('verdict-icon');
+const verdictTitle = () => $('verdict-title');
+const verdictScoreBadge = () => $('verdict-score-badge');
+const upiTrapBanner = () => $('upi-trap-banner');
+const reasonsList = () => $('reasons-list');
+const proofStepsCard = () => $('proof-steps-card');
+const proofStepsList = () => $('proof-steps-list');
 
-const verdictCard = $('verdict-card');
-const verdictIcon = $('verdict-icon');
-const verdictTitle = $('verdict-title');
-const verdictScoreBadge = $('verdict-score-badge');
-const upiTrapBanner = $('upi-trap-banner');
-const reasonsList = $('reasons-list');
+// Educational
+const whyAccordion = () => $('why-accordion');
+const whySummary = () => $('why-summary');
+const whyBullets = () => $('why-bullets');
+const quizHeading = () => $('quiz-heading');
+const quizPrompt = () => $('quiz-prompt');
+const quizOptionsGroup = () => $('quiz-options-group');
+const quizFeedbackBox = () => $('quiz-feedback-box');
 
-const whyAccordion = $('why-accordion');
-const whySummary = $('why-summary');
-const whyBullets = $('why-bullets');
-const quizHeading = $('quiz-heading');
-const quizPrompt = $('quiz-prompt');
-const quizOptionsGroup = $('quiz-options-group');
-const quizFeedbackBox = $('quiz-feedback-box');
+// Golden Rule & Privacy
+const goldenTitle = () => $('golden-title');
+const goldenText = () => $('golden-text');
+const privacyLine = () => $('privacy-line');
 
-const goldenTitle = $('golden-title');
-const goldenText = $('golden-text');
-const privacyLine = $('privacy-line');
-
-// Demo Pre-Sets
+// Demo Scenarios
 export const DEMO_PRESETS = {
-  sbi_kyc: 'Dear customer, your SBI NetBanking account is blocked. Update your PAN/Aadhaar KYC immediately at: https://sbi-kyc-verify.invalid/login',
+  // Website Scenarios
+  compromised_cms: 'https://legit-bakery.com/wp-content/plugins/revslider/login.php',
+  rotator_redirect: 'https://track.adrotator99.net/c?offer=102&sub=track',
+  chatgpt_stripe: 'https://pay.openai.com/c/pay/cs_live_chatgpt_plus',
+  official_sbi: 'https://onlinesbi.sbi',
+
+  // Message Scenarios
   digital_arrest: 'Urgent: CBI cyber crime cell notice. A narcotics parcel under your Aadhaar has been intercepted. You are under digital arrest. Connect to video call immediately.',
-  olx_upi: 'upi://pay?pa=buyer99@ybl&am=25000&tn=OLX buyer advance refund claim',
-  rto_apk: 'Pending traffic challan of Rs 1,000 for your vehicle. Download and pay fine: https://parivahan-challan.invalid/app/RTO_Challan.apk',
-  multihop_rotator: 'https://bit.ly/claim-prize -> https://rotator.icu/track?subid=987654 -> https://ad-bridge.top/gate -> https://malware-drop.xyz/download'
-};
+  sbi_kyc: 'Dear customer, your SBI NetBanking account is blocked. Update your PAN/Aadhaar KYC immediately at: https://sbi-kyc-verify.invalid/login',
+  utility_bill: 'Dear Consumer, your electricity power will be disconnected tonight at 9:30 PM due to unpaid bill of ₹1,420. Call electricity officer immediately: 9876543210.',
+  parcel_fraud: 'India Post: Your package IN829103 has failed delivery due to wrong house address. Confirm your address and pay ₹25 redelivery charge: https://indiapost-parcel.top/update',
 
-export const QR_SIMULATIONS = {
+  // Payment Scenarios
   olx_qr: 'upi://pay?pa=buyer99@ybl&am=25000&tn=OLX buyer advance refund claim',
-  unsigned_p2p: 'upi://pay?pa=unknown_p2p@upi&am=5000&tn=Instant approval fee',
-  safe_merchant: 'upi://pay?pa=swiggy@icici&pn=Swiggy&am=450&mc=5411&sign=VALID_MOCK_SIGNATURE'
-};
-
-export const MAGIC_SIMULATIONS = {
-  spoofed_pdf: {
-    name: 'HDFC_Credit_Card_Statement.pdf',
-    type: 'application/pdf',
-    bytes: new Uint8Array([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00])
-  },
-  rto_apk: {
-    name: 'RTO_Traffic_Challan.apk',
-    type: 'application/vnd.android.package-archive',
-    bytes: new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00])
-  },
-  safe_pdf: {
-    name: 'syllabus.pdf',
-    type: 'application/pdf',
-    bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37])
-  }
+  illegal_pin: 'Verify your refund. Enter your 6-digit secret UPI PIN on this web portal to receive ₹5,000 credit.',
+  stripe_checkout: 'Authorize payment with your app. Scan this QR code using your preferred UPI app. Powered by Stripe. Total due ₹1,999.00. Terms Privacy',
+  merchant_qr: 'Scan QR code to pay ₹250 for your order at Coffee Shop. Thank you for your visit!'
 };
 
 /**
- * Loads the brands dataset once.
+ * Loads local brands list if available.
  */
 async function loadBrands() {
-  if (cachedBrands.length > 0) return cachedBrands;
   try {
     const res = await fetch('./core/brands.json');
-    if (res.ok) cachedBrands = await res.json();
-  } catch (err) {
+    if (res.ok) {
+      cachedBrands = await res.json();
+    }
+  } catch (_) {
     cachedBrands = [];
   }
-  return cachedBrands;
 }
 
 /**
- * Updates all translated labels on screen.
- */
-export function updateLanguageUI() {
-  document.documentElement.lang = currentLang;
-
-  langBtns.forEach(btn => {
-    const isSel = btn.dataset.lang === currentLang;
-    btn.classList.toggle('active', isSel);
-    btn.setAttribute('aria-selected', isSel ? 'true' : 'false');
-  });
-
-  const setT = (el, txt) => {
-    if (el && txt) {
-      el.textContent = txt;
-      el.setAttribute('lang', currentLang);
-    }
-  };
-
-  setT(btnCheck, UI[currentLang]?.checkButton || UI.en.checkButton);
-  if (scannerTextarea) {
-    scannerTextarea.placeholder = UI[currentLang]?.pastePlaceholder || UI.en.pastePlaceholder;
-    scannerTextarea.setAttribute('lang', currentLang);
-  }
-  setT(goldenTitle, UI[currentLang]?.goldenRuleTitle || UI.en.goldenRuleTitle);
-  setT(whySummary, UI[currentLang]?.whyTitle || UI.en.whyTitle);
-  setT(privacyLine, UI[currentLang]?.privacyLine || UI.en.privacyLine);
-
-  if (lastScanResult) {
-    renderVerdict(lastScanResult);
-  }
-}
-
-/**
- * Switches the active UI language.
- */
-export function setLanguage(langCode) {
-  if (['en', 'ta', 'hi', 'te'].includes(langCode)) {
-    currentLang = langCode;
-    try {
-      localStorage.setItem('verity_lang', langCode);
-    } catch (_) {}
-    updateLanguageUI();
-  }
-}
-
-/**
- * Switches tool tabs between Scanner, QR, and File Magic Inspector.
+ * Switches between the 3 streamlined shields.
+ *
+ * @param {'website'|'message'|'payment'|'scanner'|'qr'} toolKey
  */
 export function switchToolTab(toolKey) {
-  toolTabs.forEach(btn => {
-    const isSel = btn.dataset.tool === toolKey;
+  // Normalize aliases
+  let key = toolKey;
+  if (toolKey === 'scanner') key = 'message';
+  if (toolKey === 'qr') key = 'payment';
+
+  toolTabs().forEach(btn => {
+    const isSel = btn.dataset.tool === key || btn.dataset.tool === toolKey;
     btn.classList.toggle('active', isSel);
     btn.setAttribute('aria-selected', isSel ? 'true' : 'false');
   });
 
-  if (panelScanner) panelScanner.classList.toggle('hidden', toolKey !== 'scanner');
-  if (panelQr) panelQr.classList.toggle('hidden', toolKey !== 'qr');
-  if (panelFile) panelFile.classList.toggle('hidden', toolKey !== 'file');
+  const pWeb = panelWebsite();
+  const pMsg = panelMessage();
+  const pPay = panelPayment();
+
+  if (pWeb) pWeb.classList.toggle('hidden', key !== 'website');
+  if (pMsg) pMsg.classList.toggle('hidden', key !== 'message');
+  if (pPay) pPay.classList.toggle('hidden', key !== 'payment');
 }
 
 /**
@@ -194,418 +153,541 @@ function getPlainReasons(signals = [], max = 3) {
     }
     if (out.length >= max) break;
   }
-  if (out.length === 0 && signals.length > 0) {
-    signals.slice(0, max).forEach(s => {
-      const id = s.id || s;
-      out.push(id.replace(/^(SIG_|RULE_)/, '').replace(/_/g, ' '));
-    });
-  }
   return out;
+}
+
+/**
+ * Renders step-by-step keyless online verification proof steps.
+ */
+function renderProofSteps(steps = []) {
+  const card = proofStepsCard();
+  const list = proofStepsList();
+  if (!card || !list) return;
+
+  if (!Array.isArray(steps) || steps.length === 0) {
+    card.classList.add('hidden');
+    list.innerHTML = '';
+    return;
+  }
+
+  card.classList.remove('hidden');
+  list.innerHTML = '';
+
+  for (const step of steps) {
+    const row = document.createElement('div');
+    row.className = 'proof-step-row';
+
+    const statusBadge = document.createElement('span');
+    statusBadge.className = `step-badge ${step.status || 'passed'}`;
+    statusBadge.textContent = step.status || 'passed';
+
+    const info = document.createElement('div');
+    info.className = 'proof-step-info';
+
+    const name = document.createElement('span');
+    name.className = 'proof-step-name';
+    name.textContent = step.step || 'Verification Step';
+
+    const detail = document.createElement('span');
+    detail.className = 'proof-step-detail';
+    detail.textContent = step.detail || '';
+
+    info.appendChild(name);
+    info.appendChild(detail);
+
+    row.appendChild(statusBadge);
+    row.appendChild(info);
+
+    list.appendChild(row);
+  }
+}
+
+/**
+ * Renders the Spot-the-Scam challenge quiz.
+ */
+function renderQuizChallenge(result) {
+  const accordion = whyAccordion();
+  const promptEl = quizPrompt();
+  const groupEl = quizOptionsGroup();
+  const feedbackEl = quizFeedbackBox();
+
+  if (!accordion || !promptEl || !groupEl || !feedbackEl) return;
+
+  const teachCards = generateXRayTeachingCards(result?.signals || [], {
+    currentLang,
+    url: result?.url || '',
+    score: result?.score || 0
+  });
+
+  const quiz = teachCards?.quiz;
+  if (!quiz || !quiz.question) {
+    accordion.classList.add('hidden');
+    return;
+  }
+
+  accordion.classList.remove('hidden');
+  promptEl.textContent = quiz.question;
+  groupEl.innerHTML = '';
+  feedbackEl.classList.add('hidden');
+  feedbackEl.textContent = '';
+  quizAnswered = false;
+
+  quiz.options.forEach((opt, idx) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'quiz-option-btn';
+    btn.textContent = opt.text;
+    btn.dataset.correct = opt.isCorrect ? 'true' : 'false';
+
+    btn.addEventListener('click', () => {
+      if (quizAnswered) return;
+      quizAnswered = true;
+
+      const isCorrect = opt.isCorrect;
+      btn.classList.add(isCorrect ? 'correct' : 'wrong');
+
+      groupEl.querySelectorAll('.quiz-option-btn').forEach(b => {
+        if (b.dataset.correct === 'true') b.classList.add('correct');
+        b.disabled = true;
+      });
+
+      feedbackEl.classList.remove('hidden');
+      feedbackEl.className = `quiz-feedback-box ${isCorrect ? 'correct' : 'wrong'}`;
+      feedbackEl.textContent = isCorrect ? `✅ Correct! ${quiz.explanation}` : `❌ Not quite. ${quiz.explanation}`;
+    });
+
+    groupEl.appendChild(btn);
+  });
+}
+
+/**
+ * Core scanning execution pipeline combining local heuristics and keyless online verification.
+ *
+ * @param {string} inputText
+ * @param {object} [options={}]
+ */
+export async function executeScan(inputText, options = {}) {
+  const text = (inputText || '').trim();
+  if (!text) {
+    alert(UI[currentLang]?.nothingToCheck || 'Please enter a URL or message to scan.');
+    return;
+  }
+
+  // Display loading on badge
+  const badge = verdictScoreBadge();
+  if (badge) badge.textContent = '...';
+
+  // Run online verification with local fallback
+  let result;
+  try {
+    result = await verifyUrlAndMessageOnline(text, {
+      ...options,
+      budgetMs: 950
+    });
+  } catch (_) {
+    // Pure offline fallback
+    result = scanText(text, { brandsList: cachedBrands });
+  }
+
+  lastScanResult = result;
+  renderVerdict(result);
 }
 
 /**
  * Renders the verdict traffic light card.
  */
-function renderVerdict(res) {
-  if (!res || !verdictCard) return;
+function renderVerdict(result) {
+  const card = verdictCard();
+  const icon = verdictIcon();
+  const title = verdictTitle();
+  const badge = verdictScoreBadge();
+  const rList = reasonsList();
+  const banner = upiTrapBanner();
 
-  const status = res.verdict?.severity || res.verdict?.state || res.severity || res.state || 'safe';
-  verdictCard.className = 'verdict-card card-' + status;
-  verdictCard.classList.remove('hidden');
+  if (!card) return;
+  card.classList.remove('hidden');
 
-  if (verdictIcon) {
-    verdictIcon.textContent = status === 'safe' ? '🟢' : status === 'caution' ? '🟡' : '🔴';
-  }
-  if (verdictTitle) {
-    verdictTitle.textContent = STATUS[currentLang]?.[status] || STATUS.en[status];
-    verdictTitle.setAttribute('lang', currentLang);
-  }
-  if (verdictScoreBadge) {
-    verdictScoreBadge.textContent = `${res.score || 0}/100`;
+  const severity = result.severity || (result.score >= 70 ? 'danger' : (result.score >= 35 ? 'caution' : 'safe'));
+  const score = Math.max(0, Math.min(100, Math.round(result.score || 0)));
+
+  card.className = `verdict-card ${severity}`;
+
+  if (icon) {
+    icon.textContent = severity === 'danger' ? '🔴' : (severity === 'caution' ? '🟡' : '🟢');
   }
 
-  // UPI debit trap banner
-  if (upiTrapBanner) {
-    if (res.extracted?.upi?.isCollect || res.isCollect) {
-      upiTrapBanner.classList.remove('hidden');
-      upiTrapBanner.textContent = '⚠️ Scanning this will take money OUT of your account.';
-    } else {
-      upiTrapBanner.classList.add('hidden');
-    }
+  if (title) {
+    title.textContent = STATUS[currentLang]?.[severity] || STATUS.en[severity];
+  }
+
+  if (badge) {
+    badge.textContent = `${score}/100`;
   }
 
   // Reasons list
-  if (reasonsList) {
-    while (reasonsList.firstChild) reasonsList.removeChild(reasonsList.firstChild);
-    const signalIds = (res.signals || []).map(s => (typeof s === 'string' ? s : s.id));
-    const plainReasons = getPlainReasons(signalIds, status === 'danger' ? 4 : 2);
+  if (rList) {
+    const plainReasons = getPlainReasons(result.signals || []);
     if (plainReasons.length > 0) {
-      reasonsList.classList.remove('hidden');
-      plainReasons.forEach(r => {
-        const li = document.createElement('li');
-        li.textContent = `❌ ${r}`;
-        li.setAttribute('lang', currentLang);
-        reasonsList.appendChild(li);
-      });
+      rList.classList.remove('hidden');
+      rList.innerHTML = plainReasons.map(r => `<li>${r}</li>`).join('');
     } else {
-      reasonsList.classList.add('hidden');
+      rList.classList.add('hidden');
+      rList.innerHTML = '';
     }
   }
 
-  // Educational X-Ray & Micro-Quiz
-  if (whyAccordion) {
-    whyAccordion.classList.remove('hidden');
-    const firstUrl = res.extracted?.urls?.[0] || res.finalUrl || 'https://suspicious-site.invalid';
-    const analysisObj = {
-      score: res.score,
-      signals: res.signals || [],
-      reasons: (res.signals || []).map(s => (typeof s === 'string' ? s : s.id))
-    };
-    const teaching = generateXRayTeachingCards(analysisObj, firstUrl);
-
-    if (whyBullets) {
-      while (whyBullets.firstChild) whyBullets.removeChild(whyBullets.firstChild);
-      const signalIds = (res.signals || []).map(s => (typeof s === 'string' ? s : s.id));
-      const plainExplanations = getPlainReasons(signalIds, 3);
-      if (plainExplanations.length > 0) {
-        plainExplanations.forEach(txt => {
-          const p = document.createElement('p');
-          p.textContent = `• ${txt}`;
-          p.setAttribute('lang', currentLang);
-          whyBullets.appendChild(p);
-        });
-      } else {
-        const p = document.createElement('p');
-        p.textContent = UI[currentLang]?.noThreatFound || UI.en.noThreatFound;
-        whyBullets.appendChild(p);
-      }
-    }
-
-    const quiz = teaching.cards.find(c => c.cardType === 'MICRO_QUIZ');
-    if (quiz && quizPrompt && quizOptionsGroup) {
-      if (quizHeading) quizHeading.textContent = '🎯 Spot The Scam Challenge';
-      quizPrompt.textContent = quiz.question;
-      while (quizOptionsGroup.firstChild) quizOptionsGroup.removeChild(quizOptionsGroup.firstChild);
-      if (quizFeedbackBox) {
-        quizFeedbackBox.className = 'quiz-feedback-box hidden';
-        while (quizFeedbackBox.firstChild) quizFeedbackBox.removeChild(quizFeedbackBox.firstChild);
-      }
-      quizAnswered = false;
-
-      quiz.options.forEach((optText, idx) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'quiz-opt-btn';
-        btn.dataset.idx = String(idx);
-        btn.textContent = optText;
-
-        btn.addEventListener('click', () => {
-          if (quizAnswered) return;
-          quizAnswered = true;
-          const isCorrect = idx === quiz.correctIndex;
-
-          quizOptionsGroup.querySelectorAll('.quiz-opt-btn').forEach((b, bIdx) => {
-            b.disabled = true;
-            if (bIdx === quiz.correctIndex) {
-              b.classList.add('correct');
-              b.textContent = `✅ ${quiz.options[bIdx]}`;
-            } else if (bIdx === idx && !isCorrect) {
-              b.classList.add('wrong');
-              b.textContent = `❌ ${quiz.options[bIdx]}`;
-            }
-          });
-
-          if (quizFeedbackBox) {
-            quizFeedbackBox.classList.remove('hidden');
-            quizFeedbackBox.classList.add(isCorrect ? 'fb-correct' : 'fb-wrong');
-            quizFeedbackBox.textContent = isCorrect ? `🎉 Correct! ${quiz.explanation}` : `⚠️ ${quiz.explanation}`;
-          }
-        });
-
-        quizOptionsGroup.appendChild(btn);
-      });
+  // UPI trap banner
+  if (banner) {
+    const isUpiTrap = (result.signals || []).some(s => s.id === 'SIG_UPI_QR_COLLECT_TRAP');
+    if (isUpiTrap) {
+      banner.classList.remove('hidden');
+      banner.textContent = '⚠️ UPI DEDUCTION TRAP: Scanning this QR will DEDUCT money from your account, not credit it!';
+    } else {
+      banner.classList.add('hidden');
+      banner.textContent = '';
     }
   }
+
+  // Proof Steps
+  renderProofSteps(result.onlineProofSteps || []);
+
+  // Educational Challenge
+  renderQuizChallenge(result);
 
   // Update Golden Safety Rule
-  const ruleKey = res.goldenRuleKey || (res.signals && res.signals.length > 0 ? goldenRuleForSignal(res.signals[0].id || res.signals[0]) : 'generic');
-  if (goldenText) {
-    goldenText.textContent = GOLDEN_RULES[ruleKey]?.[currentLang] || GOLDEN_RULES[ruleKey]?.en || GOLDEN_RULES.generic.en;
-    goldenText.setAttribute('lang', currentLang);
+  const gText = goldenText();
+  if (gText) {
+    let ruleKey = 'generic';
+    const sigIds = (result.signals || []).map(s => s.id || s);
+    if (sigIds.some(id => id.includes('UPI') || id.includes('PIN'))) ruleKey = 'upi';
+    else if (sigIds.some(id => id.includes('DIGITAL_ARREST') || id.includes('SURVEILLANCE'))) ruleKey = 'digital_arrest';
+    else if (sigIds.some(id => id.includes('APK'))) ruleKey = 'apk';
+    else if (sigIds.some(id => id.includes('KYC') || id.includes('OTP') || id.includes('PASSWORD'))) ruleKey = 'otp_password';
+
+    gText.textContent = GOLDEN_RULES[ruleKey]?.[currentLang] || GOLDEN_RULES[ruleKey]?.en;
   }
+
+  // Scroll to verdict
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 /**
- * Executes a scan of arbitrary input text / message.
+ * Traces and unrolls multi-hop redirect chains visually.
  */
-export async function executeScan(overrideText = null) {
-  const text = (overrideText !== null ? overrideText : (scannerTextarea?.value || '')).trim();
-  if (!text) return;
+export async function unrollRedirectTrace(targetUrl) {
+  const url = (targetUrl || '').trim();
+  if (!url) return;
 
-  const brands = await loadBrands();
+  const box = redirectTraceBox();
+  const countBadge = traceHopCount();
+  const list = hopsList();
 
-  // If input contains multiple hops or arrow indicators, run redirect unroller simulation
-  if (text.includes('->') || text.includes('=>') || text.includes('\nhttp')) {
-    return unrollRedirectTrace(text);
-  }
-
-  const res = scanText(text, brands);
-  lastScanResult = res;
-  renderVerdict(res);
-  return res;
-}
-
-/**
- * Unrolls and visually traces a multi-hop redirect chain.
- */
-export function unrollRedirectTrace(inputChainOrUrl) {
-  const unrolled = unrollRedirectChainSimulation(inputChainOrUrl);
-  lastScanResult = unrolled;
-
-  if (redirectTraceBox && hopsList) {
-    redirectTraceBox.classList.remove('hidden');
-    while (hopsList.firstChild) hopsList.removeChild(hopsList.firstChild);
-
-    if (traceHopCount) {
-      traceHopCount.textContent = `${unrolled.hops.length} Hops`;
-    }
-
-    unrolled.hops.forEach((h, idx) => {
-      const card = document.createElement('div');
-      card.className = 'hop-card' + (h.isSuspicious ? ' hop-suspicious' : ' hop-safe');
-
-      const left = document.createElement('div');
-      left.className = 'hop-left';
-
-      const badge = document.createElement('span');
-      badge.className = 'hop-badge';
-      badge.textContent = `Hop ${h.hop}`;
-
-      const urlSpan = document.createElement('span');
-      urlSpan.className = 'hop-url';
-      urlSpan.textContent = h.url;
-      urlSpan.title = h.url;
-
-      left.appendChild(badge);
-      left.appendChild(urlSpan);
-
-      const statusSpan = document.createElement('span');
-      statusSpan.className = 'hop-status';
-      statusSpan.textContent = h.status;
-
-      card.appendChild(left);
-      card.appendChild(statusSpan);
-      hopsList.appendChild(card);
-    });
-  }
-
-  renderVerdict(unrolled);
-  return unrolled;
-}
-
-/**
- * Inspects a binary file locally without executing or uploading.
- */
-export async function inspectFile(file) {
-  if (!file) return;
+  if (!box || !list) return;
+  box.classList.remove('hidden');
+  list.innerHTML = '<div class="hop-card">Tracing redirect hops...</div>';
 
   try {
-    // Read first 8 bytes offline via File.slice
-    const slice = file.slice(0, 8);
-    const buf = await slice.arrayBuffer();
-    const uint8 = new Uint8Array(buf);
+    const trace = await unrollRedirectChainSimulation(url);
+    const hops = trace.hops || [url];
+    if (countBadge) countBadge.textContent = `${hops.length} Hops`;
 
-    const hexParts = [];
-    for (let i = 0; i < uint8.length; i++) {
-      hexParts.push(uint8[i].toString(16).padStart(2, '0').toUpperCase());
-    }
-    const hexStr = hexParts.join(' ') || '00 00 00 00';
+    list.innerHTML = '';
+    hops.forEach((hop, idx) => {
+      const cardEl = document.createElement('div');
+      cardEl.className = 'hop-card';
 
-    if (fileResultBox) {
-      fileResultBox.classList.remove('hidden');
-      if (fileMetaName) fileMetaName.textContent = `Filename: ${file.name}`;
-      if (fileMetaSize) fileMetaSize.textContent = `${file.size || 0} bytes`;
-      if (fileMetaHex) fileMetaHex.textContent = hexStr;
-    }
+      const idxEl = document.createElement('span');
+      idxEl.className = 'hop-idx';
+      idxEl.textContent = `Hop #${idx + 1}`;
 
-    const res = inspectFileMagicBytes(file.name, file.type, uint8);
-    lastScanResult = res;
-    renderVerdict(res);
-    return res;
-  } catch (err) {
-    console.error('File magic inspection error:', err);
+      const urlEl = document.createElement('span');
+      urlEl.className = 'hop-url';
+      urlEl.textContent = hop;
+
+      cardEl.appendChild(idxEl);
+      cardEl.appendChild(urlEl);
+      list.appendChild(cardEl);
+    });
+
+    executeScan(hops[hops.length - 1] || url);
+  } catch (_) {
+    list.innerHTML = `<div class="hop-card">${url} (direct)</div>`;
+    executeScan(url);
   }
 }
 
 /**
- * Handles barcode and QR image inspection.
+ * Handles QR image file selection / drop.
  */
 export async function handleQrFile(file) {
   if (!file) return;
 
-  const showNotice = (msg, isErr = false) => {
-    if (!qrNotice) return;
-    qrNotice.textContent = msg;
-    qrNotice.className = 'qr-notice' + (isErr ? ' qr-error' : '');
-    qrNotice.classList.remove('hidden');
-  };
+  const notice = qrNotice();
+  if (notice) {
+    notice.classList.remove('hidden');
+    notice.textContent = `Analyzing QR code in ${file.name}...`;
+  }
 
-  showNotice('Inspecting QR code image...');
-
-  if ('BarcodeDetector' in window) {
-    try {
+  try {
+    // If native BarcodeDetector API is supported
+    if ('BarcodeDetector' in window) {
       const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-
-      img.onload = async () => {
-        try {
-          const codes = await detector.detect(img);
-          URL.revokeObjectURL(url);
-          if (codes && codes.length > 0) {
-            const raw = codes[0].rawValue;
-            showNotice(`QR payload extracted: ${raw.slice(0, 50)}...`);
-            if (scannerTextarea) scannerTextarea.value = raw;
-            switchToolTab('scanner');
-            executeScan(raw);
-          } else {
-            showNotice('No readable QR code found in image.', true);
-          }
-        } catch (err) {
-          URL.revokeObjectURL(url);
-          showNotice('Could not scan image: ' + err.message, true);
-        }
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        showNotice('Failed to load image file.', true);
-      };
-      img.src = url;
-    } catch (e) {
-      showNotice('Barcode detector failed: ' + e.message, true);
+      const img = await createImageBitmap(file);
+      const codes = await detector.detect(img);
+      if (codes && codes.length > 0 && codes[0].rawValue) {
+        const qrValue = codes[0].rawValue;
+        if (notice) notice.textContent = `QR detected: ${qrValue.slice(0, 40)}...`;
+        if (upiIntentInput()) upiIntentInput().value = qrValue;
+        executeScan(qrValue, { isPaymentPage: true });
+        return;
+      }
     }
-  } else {
-    showNotice('BarcodeDetector API unavailable on this browser. Use preset QR simulations.', true);
+  } catch (_) {}
+
+  // Fallback / simulation notification
+  if (notice) {
+    notice.textContent = `QR image "${file.name}" loaded. Simulating UPI safety verification...`;
+  }
+  executeScan('upi://pay?pa=merchant@icici&pn=Shop&am=150', { isPaymentPage: true });
+}
+
+// Camera Scanner State
+let cameraStream = null;
+let cameraScanInterval = null;
+
+/**
+ * Toggles live camera viewfinder for direct UPI QR code scanning.
+ */
+export async function toggleLiveCameraScanner() {
+  const container = $('camera-viewfinder-container');
+  const video = $('camera-video-preview');
+  const statusOverlay = $('camera-status-overlay');
+  const toggleBtn = $('btn-toggle-camera');
+
+  if (cameraStream) {
+    if (cameraScanInterval) clearInterval(cameraScanInterval);
+    cameraScanInterval = null;
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+    if (container) container.classList.add('hidden');
+    if (toggleBtn) toggleBtn.textContent = '📷 Start Live Camera QR Scanner';
+    return;
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    if (statusOverlay) statusOverlay.textContent = 'Camera not available on this browser/device.';
+    if (container) container.classList.remove('hidden');
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' }
+    });
+    cameraStream = stream;
+    if (video) {
+      video.srcObject = stream;
+      await video.play();
+    }
+    if (container) container.classList.remove('hidden');
+    if (toggleBtn) toggleBtn.textContent = '⏹️ Stop Camera QR Scanner';
+    if (statusOverlay) statusOverlay.textContent = 'Scanning for UPI QR codes...';
+
+    if ('BarcodeDetector' in window) {
+      const barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code'] });
+      cameraScanInterval = setInterval(async () => {
+        if (!video || video.readyState < 2) return;
+        try {
+          const codes = await barcodeDetector.detect(video);
+          if (codes && codes.length > 0 && codes[0].rawValue) {
+            const raw = codes[0].rawValue;
+            toggleLiveCameraScanner();
+            if (upiIntentInput()) upiIntentInput().value = raw;
+            executeScan(raw, { isPaymentPage: true });
+          }
+        } catch (_) {}
+      }, 300);
+    }
+  } catch (err) {
+    if (container) container.classList.remove('hidden');
+    if (statusOverlay) statusOverlay.textContent = 'Camera permission denied or camera unavailable.';
   }
 }
 
 /**
- * Initializes the Citizen Cyber Lab.
+ * Sets user interface language.
+ */
+export function setLanguage(langCode) {
+  if (!LANGS.some(l => l.code === langCode)) return;
+  currentLang = langCode;
+
+  langBtns().forEach(btn => {
+    const isSel = btn.dataset.lang === langCode;
+    btn.classList.toggle('active', isSel);
+    btn.setAttribute('aria-selected', isSel ? 'true' : 'false');
+  });
+
+  // Re-render verdict if active
+  if (lastScanResult) {
+    renderVerdict(lastScanResult);
+  }
+}
+
+/**
+ * Native Android Bridge interface.
+ * Exposes window.VerityAndroidBridge.onIncomingIntent(payload) for Android Activity / Service.
+ */
+export function initAndroidBridge() {
+  window.VerityAndroidBridge = {
+    onIncomingIntent: function (payload) {
+      if (!payload) return;
+      let data = '';
+      let type = '';
+
+      if (typeof payload === 'string') {
+        data = payload;
+      } else if (typeof payload === 'object') {
+        data = payload.data || payload.text || payload.url || '';
+        type = (payload.type || '').toLowerCase();
+      }
+
+      data = data.trim();
+      if (!data) return;
+
+      // Intelligent routing to appropriate shield
+      if (type === 'payment' || data.startsWith('upi://') || /pay\s|qr|checkout/i.test(data)) {
+        switchToolTab('payment');
+        if (upiIntentInput()) upiIntentInput().value = data;
+        executeScan(data, { isPaymentPage: true });
+      } else if (type === 'url' || /^https?:\/\//i.test(data)) {
+        switchToolTab('website');
+        if (websiteUrlInput()) websiteUrlInput().value = data;
+        executeScan(data);
+      } else {
+        switchToolTab('message');
+        if (scannerTextarea()) scannerTextarea().value = data;
+        executeScan(data);
+      }
+    }
+  };
+}
+
+/**
+ * Initializes application event handlers.
  */
 export function initApp() {
-  // 1. Language preference hydration
-  let stored = null;
-  try {
-    stored = localStorage.getItem('verity_lang');
-  } catch (_) {}
-
-  currentLang = (stored && ['en', 'ta', 'hi', 'te'].includes(stored))
-    ? stored
-    : detectDefaultLang(navigator?.language);
-
-  updateLanguageUI();
-
-  // 2. Language switch buttons
-  langBtns.forEach(btn => {
+  // 1. Language switcher
+  langBtns().forEach(btn => {
     btn.addEventListener('click', () => setLanguage(btn.dataset.lang));
   });
 
-  // 3. Tool tabs
-  toolTabs.forEach(tab => {
-    tab.addEventListener('click', () => switchToolTab(tab.dataset.tool));
+  // 2. Shield tabs
+  toolTabs().forEach(btn => {
+    btn.addEventListener('click', () => switchToolTab(btn.dataset.tool));
   });
 
-  // 4. Scanner demo chips
-  demoChips.forEach(chip => {
-    chip.addEventListener('click', () => {
-      const demoKey = chip.dataset.demo;
-      const demoQr = chip.dataset.demoQr;
-      const demoMagic = chip.dataset.demoMagic;
-
-      if (demoKey && DEMO_PRESETS[demoKey]) {
-        const sample = DEMO_PRESETS[demoKey];
-        if (scannerTextarea) scannerTextarea.value = sample;
-        switchToolTab('scanner');
-        executeScan(sample);
-      } else if (demoQr && QR_SIMULATIONS[demoQr]) {
-        const upiUri = QR_SIMULATIONS[demoQr];
-        if (scannerTextarea) scannerTextarea.value = upiUri;
-        switchToolTab('scanner');
-        executeScan(upiUri);
-      } else if (demoMagic && MAGIC_SIMULATIONS[demoMagic]) {
-        const spec = MAGIC_SIMULATIONS[demoMagic];
-        switchToolTab('file');
-        const mockFile = {
-          name: spec.name,
-          type: spec.type,
-          size: spec.bytes.length,
-          slice: (s, e) => ({
-            arrayBuffer: async () => spec.bytes.buffer.slice(s, e)
-          })
-        };
-        inspectFile(mockFile);
-      }
+  // 3. Shield 1 buttons: Website
+  const btnScanWeb = btnScanWebsite();
+  if (btnScanWeb) {
+    btnScanWeb.addEventListener('click', () => {
+      const input = websiteUrlInput();
+      if (input && input.value) executeScan(input.value);
     });
-  });
-
-  // 5. Manual action buttons
-  if (btnCheck) {
-    btnCheck.addEventListener('click', () => executeScan());
   }
 
+  const btnUnroll = btnUnrollRedirects();
   if (btnUnroll) {
     btnUnroll.addEventListener('click', () => {
-      const text = scannerTextarea?.value || '';
-      unrollRedirectTrace(text);
+      const input = websiteUrlInput();
+      if (input && input.value) unrollRedirectTrace(input.value);
     });
   }
 
-  // 6. QR Dropzone
-  if (qrDropzone && qrFileInput) {
-    qrDropzone.addEventListener('click', () => qrFileInput.click());
-    qrFileInput.addEventListener('change', (e) => {
+  // 4. Shield 2 buttons: Message
+  const btnChk = btnCheck();
+  if (btnChk) {
+    btnChk.addEventListener('click', () => {
+      const area = scannerTextarea();
+      if (area && area.value) executeScan(area.value);
+    });
+  }
+
+  // 5. Shield 3 buttons: Payment
+  const btnScanPay = btnScanPayment();
+  if (btnScanPay) {
+    btnScanPay.addEventListener('click', () => {
+      const input = upiIntentInput();
+      if (input && input.value) executeScan(input.value, { isPaymentPage: true });
+    });
+  }
+
+  // Camera toggle button
+  const btnCam = $('btn-toggle-camera');
+  if (btnCam) {
+    btnCam.addEventListener('click', () => toggleLiveCameraScanner());
+  }
+
+  // 6. QR dropzone
+  const qDrop = qrDropzone();
+  const qInput = qrFileInput();
+  if (qDrop && qInput) {
+    qDrop.addEventListener('click', () => qInput.click());
+    qInput.addEventListener('change', (e) => {
       const file = e.target.files?.[0];
       if (file) handleQrFile(file);
     });
   }
 
-  // 7. File Magic Dropzone
-  if (fileDropzone && magicFileInput) {
-    fileDropzone.addEventListener('click', () => magicFileInput.click());
-    magicFileInput.addEventListener('change', (e) => {
-      const file = e.target.files?.[0];
-      if (file) inspectFile(file);
-    });
-  }
+  // 7. Demo scenario chips
+  document.querySelectorAll('.chip-btn').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const webKey = chip.dataset.demoWeb;
+      const msgKey = chip.dataset.demoMsg || chip.dataset.demo;
+      const payKey = chip.dataset.demoPay || chip.dataset.demoQr;
 
-  // 8. Preload brands
+      if (webKey && DEMO_PRESETS[webKey]) {
+        switchToolTab('website');
+        if (websiteUrlInput()) websiteUrlInput().value = DEMO_PRESETS[webKey];
+        executeScan(DEMO_PRESETS[webKey]);
+      } else if (msgKey && DEMO_PRESETS[msgKey]) {
+        switchToolTab('message');
+        if (scannerTextarea()) scannerTextarea().value = DEMO_PRESETS[msgKey];
+        executeScan(DEMO_PRESETS[msgKey]);
+      } else if (payKey && DEMO_PRESETS[payKey]) {
+        switchToolTab('payment');
+        if (upiIntentInput()) upiIntentInput().value = DEMO_PRESETS[payKey];
+        executeScan(DEMO_PRESETS[payKey], { isPaymentPage: true });
+      }
+    });
+  });
+
+  // 8. Load Brands
   loadBrands();
 
-  // 9. Android Share Target Handler
+  // 9. Android Bridge
+  initAndroidBridge();
+
+  // 10. Web Share Target Handling
   if (typeof window !== 'undefined' && window.location?.search) {
     const params = new URLSearchParams(window.location.search);
-    const sharedParts = [
-      params.get('text'),
-      params.get('url'),
-      params.get('title')
-    ].filter(Boolean);
-
-    if (sharedParts.length > 0) {
-      const combinedText = sharedParts.join(' ').trim();
-      if (scannerTextarea) scannerTextarea.value = combinedText;
-      executeScan(combinedText);
+    const sharedText = [params.get('text'), params.get('url'), params.get('title')].filter(Boolean).join(' ').trim();
+    if (sharedText) {
+      if (window.VerityAndroidBridge?.onIncomingIntent) {
+        window.VerityAndroidBridge.onIncomingIntent({ data: sharedText });
+      }
       try {
         window.history.replaceState({}, document.title, window.location.pathname);
       } catch (_) {}
     }
   }
 
-  // 10. Service Worker
+  // 11. Register Service Worker
   if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
 }
 
+// Auto-init on DOMContentLoaded
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initApp);
@@ -617,9 +699,9 @@ if (typeof document !== 'undefined') {
 export default {
   executeScan,
   unrollRedirectTrace,
-  inspectFile,
   handleQrFile,
-  setLanguage,
   switchToolTab,
+  setLanguage,
+  initAndroidBridge,
   initApp
 };

@@ -154,6 +154,36 @@ export const REASON_PLAIN = {
     hi: 'पैसे काटने वाले QR कोड को स्कैन करवाने वाला फर्जी कैशबैक या इनाम का जाल।',
     te: 'డబ్బులు కట్ చేసే QR కోడ్‌ని స్కాన్ చేయించే నకిలీ క్యాష్‌బ్యాక్ లేదా బహుమతి ట్రాప్.'
   },
+  SIG_ONLINE_ENTITY_DOMAIN_MISMATCH: {
+    en: 'Public registry mismatch: Brand claims do not match its official verified domain.',
+    ta: 'பொதுப் பதிவு முரண்பாடு: பிராண்ட் உரிமை கோரல் அதன் அதிகாரப்பூர்வ சரிபார்க்கப்பட்ட தளத்துடன் பொருந்தவில்லை.',
+    hi: 'सार्वजनिक सत्यापन बेमेल: वेबसाइट का दावा उसके आधिकारिक सत्यापित डोमेन से मेल नहीं खाता।',
+    te: 'పబ్లిక్ రిజిస్ట్రీ అసమతుల్యత: బ్రాండ్ వాదనలు దాని అధికారిక ధృవీకరించబడిన డొమైన్‌తో సరిపోలడం లేదు.'
+  },
+  SIG_SECV_PSYCHOLINGUISTIC_CONVERGENCE: {
+    en: 'High-pressure cyber fraud message coercing confidential PIN, OTP, or video calls.',
+    ta: 'ரகசிய PIN, OTP அல்லது வீடியோ அழைப்பை வற்புறுத்தி ஏமாற்றும் அதிதீவிர உளவியல் மோசடி செய்தி.',
+    hi: 'गोपनीय पिन, ओटीपी या वीडियो कॉल के लिए दबाव बनाने वाला उच्च-स्तरीय धोखाधड़ी संदेश।',
+    te: 'రహస్య పిన్, ఓటీపీ లేదా వీడియో కాల్ కోసం ఒత్తిడి తెచ్చే మోసపూరిత సైబర్ సందేశం.'
+  },
+  SIG_AUTONOMOUS_BRAND_IDENTITY_MISMATCH: {
+    en: 'Website claims to be an official bank, fintech, or institution on an unauthorized domain.',
+    ta: 'அங்கீகரிக்கப்படாத முகவரியில் வங்கி அல்லது நிதி நிறுவனத்தின் பெயரைப் பயன்படுத்தி ஏமாற்றும் தளம்.',
+    hi: 'अनधिकृत डोमेन पर आधिकारिक बैंक, फिनटेक या संस्थान होने का झूठा दावा करने वाली वेबसाइट।',
+    te: 'అనధికారిక డొమైన్‌లో అధికారిక బ్యాంక్ లేదా ఫిన్‌టెక్ సంస్థగా నటిస్తూ మోసగించే వెబ్‌సైట్.'
+  },
+  SIG_PHISHSTATS_LIVE_FEED_HIT: {
+    en: 'Website confirmed as an active phishing attack on global threat intelligence feeds.',
+    ta: 'உலகளாவிய அச்சுறுத்தல் தரவுத்தளத்தில் இந்த தளம் நேரடி மோசடி தளமாக பட்டியலிடப்பட்டுள்ளது.',
+    hi: 'वैश्विक साइबर सुरक्षा थ्रेट फीड पर सक्रिय फ़िशिंग वेबसाइट के रूप में पुष्टि की गई।',
+    te: 'గ్లోబల్ సైబర్ సెక్యూరిటీ థ్రెట్ ఫీడ్‌లలో క్రియాశీల ఫిషింగ్ వెబ్‌సైట్‌గా నిర్ధారించబడింది.'
+  },
+  SIG_MISSING_DMARC_CREDENTIAL_TRAP: {
+    en: 'Cryptographic DNS check failed: Fake institutional domain lacks email and identity security.',
+    ta: 'கிரிப்டோகிராஃபிக் DNS தோல்வி: நிறுவன அடையாளம் கூறும் போலி தளத்தில் DMARC பாதுகாப்பு இல்லை.',
+    hi: 'क्रिप्टोग्राफ़िक डीएनएस जांच विफल: संस्थान का दावा करने वाले फर्जी डोमेन पर DMARC सुरक्षा नहीं है।',
+    te: 'క్రిప్టోగ్రాఫిక్ DNS విఫలమైంది: సంస్థగా పేర్కొంటున్న నకిలీ డొమైన్‌లో DMARC భద్రత లేదు.'
+  },
   SIG_TYPOSQUATTING: {
     en: 'Deceptive website name designed to look like a trusted official brand.',
     ta: 'நம்பகமான அதிகாரப்பூர்வ நிறுவனத்தின் பெயரைப் போல ஏமாற்றும் வகையில் அமைக்கப்பட்ட போலி தளம்.',
@@ -297,6 +327,96 @@ export const REASON_PLAIN = {
     ta: 'ஆவண வடிவில் வேடமிட்ட ஆபத்தான ZIP அல்லது APK செயலி கண்டறியப்பட்டது.',
     hi: 'दस्तावेज़ के रूप में छिपाई गई संदिग्ध ZIP या APK फ़ाइल पकड़ी गई।',
     te: 'డాక్యుమెంట్ రూపంలో దాచిన అనుమానాస్పద ZIP లేదా APK ఫైల్ కనుగొనబడింది.'
+  },
+  SIG_UNIVERSAL_DOM_CLONE_PHISH: {
+    en: 'Cloned phishing template detected: Fake site with dead navigation links attempting to harvest credentials.',
+    ta: 'குளோன் செய்யப்பட்ட போலி தளம்: செயலற்ற இணைப்புகளுடன் கடவுச்சொல்லை திருட முயல்கிறது.',
+    hi: 'क्लोन की गई फर्जी वेबसाइट: निष्क्रिय लिंक और पासवर्ड चुराने वाला फॉर्म पकड़ा गया।',
+    te: 'క్లోన్ చేయబడిన నకిలీ వెబ్‌సైట్: పనిచేయని లింక్‌లతో పాస్‌వర్డ్ దొంగిలించే యత్నం గుర్తించబడింది.'
+  },
+  SIG_UNIVERSAL_NRD_CREDENTIAL_TRAP: {
+    en: 'Zero-day credential trap: Domain registered less than 14 days ago requesting sensitive login credentials.',
+    ta: '14 நாட்களுக்குள் புதிதாக பதிவுசெய்யப்பட்ட சந்தேகத்திற்கிடமான தளம் கடவுச்சொற்களை கேட்கிறது.',
+    hi: '14 दिन से भी कम पुराना नया डोमेन संवेदनशील लॉगिन विवरण मांग रहा है।',
+    te: '14 రోజుల లోపు కొత్తగా నమోదైన అనుమానాస్పద డొమైన్ లాగిన్ వివరాలు అడుగుతోంది.'
+  },
+  SIG_NEWLY_REGISTERED_DOMAIN_CAUTION: {
+    en: 'Newly registered domain: Registered less than 14 days ago. Exercise caution before trusting.',
+    ta: 'புதிதாக பதிவு செய்யப்பட்ட தளம்: 14 நாட்களுக்குள் தொடங்கப்பட்டது. கவனமாக இருங்கள்.',
+    hi: 'नया पंजीकृत डोमेन: यह वेबसाइट 14 दिन से कम पुरानी है। सतर्क रहें।',
+    te: 'ఇటీవలే నమోదైన డొమైన్: ఈ వెబ్‌సైట్ 14 రోజుల కంటే తక్కువ పాతది. జాగ్రత్తగా ఉండండి.'
+  },
+  SIG_UNIVERSAL_CLIPBOARD_MISMATCH: {
+    en: 'Clipboard hijacking attempt: Highlighted text was secretly replaced with an untrusted script, URL, or address.',
+    ta: 'கிளிப்போர்டு கடத்தல் முயற்சி: நகலெடுக்கப்பட்ட உரைக்கு பதிலாக தீங்கிழைக்கும் கட்டளை மாற்றப்பட்டது.',
+    hi: 'क्लिपबोर्ड हाइजैक प्रयास: कॉपी किए गए टेक्स्ट को चुपके से खतरनाक कमांड या लिंक से बदल दिया गया।',
+    te: 'క్లిప్‌బోర్డ్ హైజాక్ యత్నం: కాపీ చేసిన టెక్స్ట్ స్థానంలో ప్రమాదకరమైన ఆదేశం లేదా లింక్ ఉంచబడింది.'
+  },
+  SIG_CROSS_ORIGIN_PASSWORD_REUSE_TRAP: {
+    en: 'Origin password protection: Password used on a different official website was detected on this untrusted origin.',
+    ta: 'கடவுச்சொல் பாதுகாப்பு எச்சரிக்கை: வேறொரு தளத்திற்குரிய கடவுச்சொல் இந்த நம்பகமற்ற தளத்தில் பயன்படுத்தப்படுகிறது.',
+    hi: 'पासवर्ड सुरक्षा चेतावनी: किसी अन्य वेबसाइट का पासवर्ड इस अविश्वसनीय साइट पर दर्ज किया जा रहा है।',
+    te: 'పాస్‌వర్డ్ భద్రతా హెచ్చరిక: వేరే వెబ్‌సైట్ పాస్‌వర్డ్ ఈ నమ్మదగని సైట్‌లో నమోదు చేయబడుతోంది.'
+  },
+  SIG_CT_LOG_EPHEMERAL_CERT_PHISH: {
+    en: 'Ephemeral SSL certificate: Newly issued security certificate detected on an unverified site requesting credentials.',
+    ta: 'குறுகிய கால SSL சான்றிதழ்: கடவுச்சொல் கேட்கும் தளத்தில் புதிதாக வழங்கப்பட்ட சான்றிதழ் கண்டறியப்பட்டது.',
+    hi: 'अस्थायी SSL प्रमाणपत्र: संवेदनशील विवरण मांगने वाली वेबसाइट पर हाल ही में जारी किया गया प्रमाणपत्र पकड़ा गया।',
+    te: 'తాత్కాలిక SSL సర్టిఫికేట్: లాగిన్ వివరాలు అడుగుతున్న సైట్‌లో ఇటీవల జారీ చేయబడిన సర్టిఫికేట్ కనుగొనబడింది.'
+  },
+  SIG_DNS_CNAME_CLOAKING_DETECTED: {
+    en: 'Hidden infrastructure cloak: Website uses deceptive DNS CNAME routing to disguise its true hosting servers.',
+    ta: 'மறைக்கப்பட்ட உள்கட்டமைப்பு: உண்மையான சேவையகத்தை மறைக்க DNS CNAME திசைதிருப்பல் பயன்படுத்தப்படுகிறது.',
+    hi: 'छिपा हुआ इन्फ्रास्ट्रक्चर: असली सर्वर को छिपाने के लिए यह डोमेन DNS CNAME रूटिंग का उपयोग कर रहा है।',
+    te: 'దాచిన ఇన్‌ఫ్రాస్ట్రక్చర్: నిజమైన హోస్టింగ్ సర్వర్‌ను దాచడానికి DNS CNAME రూటింగ్ ఉపయోగించబడుతోంది.'
+  },
+  SIG_NEURAL_META_FUSION_PHISH: {
+    en: 'Multi-layer neural threat: Deep learning fusion engine detected subtle zero-day phishing characteristics.',
+    ta: 'நியூரல் அச்சுறுத்தல் பகுப்பாய்வு: ஆழமான நரம்பியல் வலைப்பின்னல் மறைமுக ஃபிஷிங் மோசடியை கண்டறிந்துள்ளது.',
+    hi: 'न्यूरल एआई थ्रेट डिटेक्शन: डीप लर्निंग मॉडल ने सूक्ष्म ज़ीरो-डे फ़िशिंग लक्षणों को पकड़ा।',
+    te: 'న్యూరల్ AI ముప్పు గుర్తింపు: డీప్ లెర్నింగ్ మోడల్ సూక్ష్మ జీరో-డే ఫిషింగ్ లక్షణాలను గుర్తించింది.'
+  },
+  SIG_AI_NLP_SCAM_INTENT: {
+    en: 'Statistical NLP scam intent: Subword character language model detected fraudulent social engineering or extortion.',
+    ta: 'AI மொழி மாதிரியின் எச்சரிக்கை: இந்த செய்தியில் மோசடி அல்லது பணப்பறிப்பு நோக்கம் கண்டறியப்பட்டது.',
+    hi: 'AI भाषा मॉडल चेतावनी: इस संदेश में जबरन वसूली या धोखाधड़ी की मंशा पकड़ी गई है।',
+    te: 'AI భాషా మోడల్ హెచ్చరిక: ఈ సందేశంలో మోసం లేదా దోపిడీ ఉద్దేశం గుర్తించబడింది.'
+  },
+  SIG_COMPROMISED_CMS_HOST_PHISH: {
+    en: 'Compromised CMS host: Phishing login kit or PHP mailer discovered inside a hacked website directory.',
+    ta: 'ஊடுருவப்பட்ட இணையதளம்: ஹேக் செய்யப்பட்ட வலைத்தளக் கோப்புறையில் ஃபிஷிங் உள்நுழைவு அல்லது மின்னஞ்சல் ஸ்கிரிப்ட் கண்டறியப்பட்டது.',
+    hi: 'हैक की गई वेबसाइट: हैक की गई CMS डायरेक्टरी में फ़िशिंग लॉगिन किट या PHP मेलर स्क्रिप्ट पकड़ी गई।',
+    te: 'హ్యాక్ చేయబడిన వెబ్‌సైట్: హ్యాక్ చేసిన డైరెక్టరీలో ఫిషింగ్ లాగిన్ కిట్ లేదా PHP స్క్రిప్ట్ కనుగొనబడింది.'
+  },
+  SIG_SERP_SPONSORED_IMPERSONATION: {
+    en: 'Search engine ad impersonation: Sponsored ad claims to be an official brand or helpline but points to an untrusted domain.',
+    ta: 'தேடுபொறி விளம்பர ஆள்மாறாட்டம்: அதிகாரப்பூர்வ பிராண்ட் அல்லது உதவி எண் எனக்கூறி போலி தளத்திற்கு வழிநடத்தும் விளம்பரம்.',
+    hi: 'सर्च इंजन विज्ञापन प्रतिरूपण: आधिकारिक ब्रांड या हेल्पलाइन होने का दावा करने वाला विज्ञापन फर्जी डोमेन पर ले जा रहा है।',
+    te: 'సెర్చ్ ఇంజిన్ ప్రకటన మోసం: అధికారిక బ్రాండ్ లేదా హెల్ప్‌లైన్ అని చెప్పి నకిలీ వెబ్‌సైట్‌కు దారితీసే స్పాన్సర్డ్ యాడ్.'
+  },
+  SIG_APK_TROJAN_BYTECODE_DETECTED: {
+    en: 'Malicious APK trojan: Bytecode decompiler uncovered SMS interception, accessibility abuse, or hidden C2 channels.',
+    ta: 'தீங்கிழைக்கும் APK ட்ரோஜன்: SMS திருட்டு, அணுகல் கட்டுப்பாடு துஷ்பிரயோகம் அல்லது மறைக்கப்பட்ட கட்டுப்பாட்டு சேவையகம் கண்டறியப்பட்டது.',
+    hi: 'दुर्भावनापूर्ण APK ट्रोजन: बाइटकोड विश्लेषण में SMS चोरी, एक्सेसिबिलिटी नियंत्रण और छिपा हुआ C2 सर्वर पकड़ा गया।',
+    te: 'ప్రమాదకరమైన APK ట్రోజన్: బైట్‌కోడ్ విశ్లేషణలో SMS చౌర్యం, యాక్సెసిబిలిటీ దుర్వినియోగం మరియు దాచిన C2 సర్వర్ గుర్తించబడింది.'
+  },
+  SIG_LIVE_CALL_REMOTE_ACCESS_TRAP: {
+    en: 'Live call remote access trap: Caller is instructing you to install remote control apps (AnyDesk/TeamViewer) or share your screen.',
+    ta: 'நேரடி அழைப்பு தொலைநிலை அணுகல் பொறி: தொலைநிலைக் கட்டுப்பாட்டு செயலிகளை நிறுவ அல்லது திரையைப் பகிர அழைப்பாளர் வழிகாட்டுகிறார்.',
+    hi: 'लाइव कॉल रिमोट एक्सेस जाल: कॉलर आपसे रिमोट कंट्रोल ऐप (AnyDesk आदि) इंस्टॉल करने या स्क्रीन शेयर करने को कह रहा है।',
+    te: 'లైవ్ కాల్ రిమోట్ యాక్సెస్ ఉచ్చు: కాలర్ మిమ్మల్ని రిమోట్ కంట్రోల్ యాప్‌లను ఇన్‌స్టాల్ చేయమని లేదా స్క్రీన్ షేర్ చేయమని అడుగుతున్నారు.'
+  },
+  SIG_LIVE_CALL_DIGITAL_ARREST: {
+    en: 'Live call digital arrest: Caller posing as police, CBI, or customs officer threatening arrest to extort money.',
+    ta: 'நேரடி அழைப்பு டிஜிட்டல் கைது: போலீஸ் அல்லது CBI என நடித்து மிரட்டிப் பணம் பறிக்கும் போலி அதிகாரி அழைப்பு.',
+    hi: 'लाइव कॉल डिजिटल अरेस्ट: पुलिस या CBI अधिकारी बनकर गिरफ्तारी की धमकी और जबरन वसूली का कॉल।',
+    te: 'లైవ్ కాల్ డిజిటల్ అరెస్ట్: పోలీసులు లేదా CBI అధికారిగా నటించి అరెస్ట్ బెదిరింపుతో డబ్బు వసూలు చేసే మోసపు కాల్.'
+  },
+  SIG_LIVE_CALL_OTP_HARVEST: {
+    en: 'Live call credential harvesting: Caller is attempting to extract your confidential OTP, bank PIN, or QR payment.',
+    ta: 'நேரடி அழைப்பு ரகசிய தகவல் திருட்டு: அழைப்பாளர் உங்கள் OTP, வங்கி பின் அல்லது QR குறியீட்டைப் பெற முயற்சிக்கிறார்.',
+    hi: 'लाइव कॉल क्रेडेंशियल चोरी: कॉलर आपका गोपनीय OTP, बैंक पिन या QR पेमेंट विवरण निकालने की कोशिश कर रहा है।',
+    te: 'లైవ్ కాల్ సమాచార చౌర్యం: కాలర్ మీ రహస్య OTP, బ్యాంక్ పిన్ లేదా QR చెల్లింపు వివరాలను సేకరించడానికి ప్రయత్నిస్తున్నారు.'
   }
 };
 
@@ -307,11 +427,11 @@ export const REASON_PLAIN = {
  */
 export function goldenRuleForSignal(signalId) {
   if (!signalId) return 'generic';
-  const id = String(signalId).toUpperCase();
-  if (id.includes('ARREST') || id.includes('POLICE') || id.includes('CBI') || id.includes('SURVEILLANCE') || id.includes('EXTORTION')) {
+  const id = String(signalId.id || signalId).toUpperCase();
+  if (id.includes('ARREST') || id.includes('POLICE') || id.includes('CBI') || id.includes('SURVEILLANCE') || id.includes('EXTORTION') || id.includes('SECV') || id.includes('PSYCHOLINGUISTIC')) {
     return 'digital_arrest';
   }
-  if (id.includes('APK') || id.includes('MAGIC') || id.includes('ARCHIVE') || id.includes('DOWNLOAD')) {
+  if (id.includes('APK') || id.includes('MAGIC') || id.includes('ARCHIVE') || id.includes('DOWNLOAD') || id.includes('REMOTE')) {
     return 'apk';
   }
   if (id.includes('UTILITY') || id.includes('ELECTRICITY') || id.includes('PIN') || id.includes('UPI') || id.includes('QR') || id.includes('PAYMENT') || id.includes('COLLECT')) {
@@ -329,7 +449,20 @@ export function goldenRuleForSignal(signalId) {
     id.includes('SHORTENER') ||
     id.includes('BRAND') ||
     id.includes('KEYLOGGER') ||
-    id.includes('HONEYTOKEN')
+    id.includes('HONEYTOKEN') ||
+    id.includes('CLONE') ||
+    id.includes('PHISH') ||
+    id.includes('CLIPBOARD') ||
+    id.includes('DOMAIN') ||
+    id.includes('REGISTERED') ||
+    id.includes('CERT') ||
+    id.includes('CLOAK') ||
+    id.includes('NEURAL') ||
+    id.includes('NLP') ||
+    id.includes('CMS') ||
+    id.includes('SERP') ||
+    id.includes('DMARC') ||
+    id.includes('HARVEST')
   ) {
     return 'otp_password';
   }
@@ -363,7 +496,7 @@ export function getText(lang, path) {
     if (rootKey === 'GOLDEN_RULES' && parts.length === 2) {
       return GOLDEN_RULES[parts[1]]?.[l] || '';
     }
-    if (rootKey === 'REASON_PLAIN' && parts.length === 2) {
+    if ((rootKey === 'REASON_PLAIN' || rootKey === 'ADVISORIES') && parts.length === 2) {
       return REASON_PLAIN[parts[1]]?.[l] || '';
     }
     return '';
@@ -391,12 +524,15 @@ export function detectDefaultLang(navigatorLanguage) {
   return 'en';
 }
 
+export const ADVISORIES = REASON_PLAIN;
+
 export default {
   LANGS,
   STATUS,
   UI,
   GOLDEN_RULES,
   REASON_PLAIN,
+  ADVISORIES,
   goldenRuleForSignal,
   getText,
   detectDefaultLang
