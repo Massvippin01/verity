@@ -1,4 +1,4 @@
-# OS generated files
+﻿# OS generated files
 .DS_Store
 .DS_Store?
 ._*
@@ -78,4 +78,5 @@ ENV/
 *.ps1
 test-*.html
 scratch/
-
+sample_data/staging_feed/keys/
+*.pem

@@ -53,7 +53,12 @@ export const UI = {
     noThreatFound: 'No threat detected. Looks safe.',
     advancedDetails: 'Advanced Technical Details',
     nothingToCheck: 'Please enter a URL or message to scan.',
-    privacyLine: 'Everything is checked on your device. Nothing is uploaded.'
+    privacyLine: 'Everything is checked on your device. Nothing is uploaded.',
+    recoveryTab: '🆘 Recovery & 1930',
+    recoveryButton: '🚨 Already Acted or Sent Money? Open Recovery Guide',
+    receiptButton: '📋 Generate Evidence Receipt',
+    safeNextStepTitle: 'Recommended Safe Next Step',
+    abstainStatus: 'INSUFFICIENT EVIDENCE (ABSTAINED)'
   },
   ta: {
     checkButton: 'இணைப்பைச் சரிபார்க்கவும்',
@@ -66,7 +71,12 @@ export const UI = {
     noThreatFound: 'அச்சுறுத்தல் எதுவும் இல்லை. பாதுகாப்பாக உள்ளது.',
     advancedDetails: 'மேம்பட்ட தொழில்நுட்ப விவரங்கள்',
     nothingToCheck: 'சரிபார்க்க ஒரு இணைப்பு அல்லது செய்தியை உள்ளிடவும்.',
-    privacyLine: 'அனைத்தும் உங்கள் சாதனத்திலேயே சரிபார்க்கப்படுகிறது. எதுவும் பதிவேற்றப்படவில்லை.'
+    privacyLine: 'அனைத்தும் உங்கள் சாதனத்திலேயே சரிபார்க்கப்படுகிறது. எதுவும் பதிவேற்றப்படவில்லை.',
+    recoveryTab: '🆘 மீட்பு & 1930',
+    recoveryButton: '🚨 ஏற்கனவே பணத்தை அனுப்பிவிட்டீர்களா? மீட்பு வழிகாட்டியைத் திறக்கவும்',
+    receiptButton: '📋 ஆதார ரசீதை உருவாக்கு',
+    safeNextStepTitle: 'பரிந்துரைக்கப்படும் அடுத்த பாதுகாப்பு நடவடிக்கை',
+    abstainStatus: 'போதுமான ஆதாரம் இல்லை (முடிவு நிறுத்திவைக்கப்பட்டுள்ளது)'
   },
   hi: {
     checkButton: 'लिंक / मैसेज जांचें',
@@ -79,20 +89,30 @@ export const UI = {
     noThreatFound: 'कोई खतरा नहीं मिला। सुरक्षित प्रतीत होता है।',
     advancedDetails: 'विस्तृत तकनीकी जानकारी',
     nothingToCheck: 'कृपया जांचने के लिए एक लिंक या मैसेज दर्ज करें।',
-    privacyLine: 'सब कुछ आपके डिवाइस पर ही जाँचा जाता है। कुछ भी अपलोड नहीं होता।'
+    privacyLine: 'सब कुछ आपके डिवाइस पर ही जाँचा जाता है। कुछ भी अपलोड नहीं होता।',
+    recoveryTab: '🆘 रिकवरी और 1930',
+    recoveryButton: '🚨 क्या पैसे कट चुके हैं? रिकवरी गाइड खोलें',
+    receiptButton: '📋 सबूत रसीद बनाएं',
+    safeNextStepTitle: 'अनुशंसित अगला सुरक्षित कदम',
+    abstainStatus: 'अपर्याप्त सबूत (अनिश्चित)'
   },
   te: {
     checkButton: 'లింక్ / మెసేజ్ తనిఖీ చేయండి',
     pastePlaceholder: 'అనుమానాస్పద వాట్సాప్ లింక్, SMS లేదా సందేశాన్ని ఇక్కడ పేస్ట్ చేయండి...',
     whyTitle: 'మేము ఈ మోసాన్ని ఎలా పట్టుకున్నాము?',
     backToSafety: 'నన్ను సురక్షిత ప్రదేశానికి తీసుకెళ్లండి',
-    goldenRuleTitle: 'గోల్డెన్ సేఫ్టీ రూల్', // REVIEW-NATIVE: colloquial Telugu safety heading
+    goldenRuleTitle: 'గోల్డెన్ సేఫ్టీ రూల్',
     currentSite: 'ప్రస్తుత వెబ్‌సైట్',
-    quickChecker: 'త్వరిత వాట్సాప్ / లింక్ చెకర్', // REVIEW-NATIVE: colloquial Telugu quick checker
+    quickChecker: 'త్వరిత వాట్సాప్ / లింక్ చెకర్',
     noThreatFound: 'ఎలాంటి ప్రమాదం గుర్తించబడలేదు. సురక్షితంగా ఉంది.',
     advancedDetails: 'మరిన్ని సాంకేతిక వివరాలు',
     nothingToCheck: 'దయచేసి స్కాన్ చేయడానికి లింక్ లేదా సందేశాన్ని నమోదు చేయండి.',
-    privacyLine: 'అంతా మీ పరికరంలోనే తనిఖీ చేయబడుతుంది. ఏదీ అప్‌లోడ్ చేయబడదు.'
+    privacyLine: 'అంతా మీ పరికరంలోనే తనిఖీ చేయబడుతుంది. ఏదీ అప్‌లోడ్ చేయబడదు.',
+    recoveryTab: '🆘 రికవరీ & 1930',
+    recoveryButton: '🚨 డబ్బులు పోయాయా? రికవరీ గైడ్ తెరవండి',
+    receiptButton: '📋 సాక్ష్యం రసీదు రూపొందించండి',
+    safeNextStepTitle: 'సిఫార్సు చేయబడిన తదుపరి చర్య',
+    abstainStatus: 'సరిపడా ఆధారాలు లేవు (అనిశ్చితం)'
   }
 };
 

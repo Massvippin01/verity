@@ -4,6 +4,7 @@
  * 1. Shield 1: Live Website & Redirect Deep-Scanner (16 URL rules + CMS + DoH + RDAP + Wikidata)
  * 2. Shield 2: WhatsApp / SMS Scam & Fact-Check Verifier (multilingual vernacular + intent)
  * 3. Shield 3: UPI QR & Payment Safety Verifier (Stripe/Razorpay checkouts vs deceptive traps)
+ * 4. Shield 4: Citizen Incident Recovery Advisor & 1930 Emergency Helpline
  *
  * Integrates window.VerityAndroidBridge.onIncomingIntent(payload) for Native Android APK integration.
  */
@@ -21,12 +22,22 @@ import {
   detectDefaultLang
 } from './core/shared/citizen-messages.js';
 import { generateXRayTeachingCards } from './core/shared/xray-educator.js';
+import { createVerdict, createAbstentionVerdict, validateVerdictContract } from './core/shared/verdict-contract.js';
+import {
+  getRecoveryGuide,
+  generateEvidenceReceipt,
+  sanitizeSecrets,
+  OFFICIAL_RECOVERY_REGISTRY,
+  INCIDENT_TYPES
+} from './core/shared/recovery-advisor.js';
 
 // Application State
 let currentLang = 'en';
 let cachedBrands = [];
 let lastScanResult = null;
 let quizAnswered = false;
+let currentIncidentType = 'APPROVED_PAYMENT_OR_TRANSFERRED';
+let activeReceipt = null;
 
 // DOM Helpers
 const $ = (id) => document.getElementById(id);
@@ -55,15 +66,41 @@ const qrFileInput = () => $('qr-file-input');
 const btnScanPayment = () => $('btn-scan-payment');
 const qrNotice = () => $('qr-notice');
 
+// Shield 4: Recovery Mode
+const panelRecovery = () => $('panel-recovery');
+const recoveryStepsList = () => $('recovery-steps-list');
+const recoveryChecklistHeading = () => $('recovery-checklist-heading');
+
+// Progress & Error
+const scanProgressBar = () => $('scan-progress-bar');
+const inputErrorMsg = () => $('input-error-msg');
+const offlineIndicator = () => $('offline-indicator');
+
 // Verdict & Proof
 const verdictCard = () => $('verdict-card');
 const verdictIcon = () => $('verdict-icon');
 const verdictTitle = () => $('verdict-title');
+const verdictCategoryTag = () => $('verdict-category-tag');
 const verdictScoreBadge = () => $('verdict-score-badge');
 const upiTrapBanner = () => $('upi-trap-banner');
+const safeActionBox = () => $('safe-action-box');
+const safeActionHeading = () => $('safe-action-heading');
+const safeActionText = () => $('safe-action-text');
+const btnOpenRecovery = () => $('btn-open-recovery');
+const btnGenerateReceipt = () => $('btn-generate-receipt');
 const reasonsList = () => $('reasons-list');
 const proofStepsCard = () => $('proof-steps-card');
 const proofStepsList = () => $('proof-steps-list');
+
+// Evidence Receipt Modal
+const receiptModal = () => $('receipt-modal');
+const btnCloseReceipt = () => $('btn-close-receipt');
+const btnCopyReceipt = () => $('btn-copy-receipt');
+const btnDownloadReceipt = () => $('btn-download-receipt');
+const receiptIdDisplay = () => $('receipt-id-display');
+const receiptTimeDisplay = () => $('receipt-time-display');
+const receiptPreviewSnippet = () => $('receipt-preview-snippet');
+const receiptSignalsList = () => $('receipt-signals-list');
 
 // Educational
 const whyAccordion = () => $('why-accordion');
@@ -78,6 +115,7 @@ const quizFeedbackBox = () => $('quiz-feedback-box');
 const goldenTitle = () => $('golden-title');
 const goldenText = () => $('golden-text');
 const privacyLine = () => $('privacy-line');
+const privacyCardContent = () => $('privacy-card-content');
 
 // Demo Scenarios
 export const DEMO_PRESETS = {
@@ -115,12 +153,11 @@ async function loadBrands() {
 }
 
 /**
- * Switches between the 3 streamlined shields.
+ * Switches between the 4 tools/shields (Website, Message, Payment, Recovery).
  *
- * @param {'website'|'message'|'payment'|'scanner'|'qr'} toolKey
+ * @param {'website'|'message'|'payment'|'recovery'|'scanner'|'qr'} toolKey
  */
 export function switchToolTab(toolKey) {
-  // Normalize aliases
   let key = toolKey;
   if (toolKey === 'scanner') key = 'message';
   if (toolKey === 'qr') key = 'payment';
@@ -134,16 +171,97 @@ export function switchToolTab(toolKey) {
   const pWeb = panelWebsite();
   const pMsg = panelMessage();
   const pPay = panelPayment();
+  const pRec = panelRecovery();
 
   if (pWeb) pWeb.classList.toggle('hidden', key !== 'website');
   if (pMsg) pMsg.classList.toggle('hidden', key !== 'message');
   if (pPay) pPay.classList.toggle('hidden', key !== 'payment');
+  if (pRec) {
+    pRec.classList.toggle('hidden', key !== 'recovery');
+    if (key === 'recovery') {
+      renderRecoverySteps(currentIncidentType);
+    }
+  }
+
+  // Clear any existing error messages
+  const errEl = inputErrorMsg();
+  if (errEl) errEl.classList.add('hidden');
+}
+
+/**
+ * Renders prioritized recovery steps based on selected incident type.
+ *
+ * @param {string} incidentType
+ */
+export function renderRecoverySteps(incidentType = currentIncidentType) {
+  currentIncidentType = incidentType;
+  const guide = getRecoveryGuide(incidentType, currentLang);
+  const heading = recoveryChecklistHeading();
+  const list = recoveryStepsList();
+
+  if (heading) {
+    heading.textContent = `🛡️ ${guide.title}`;
+  }
+
+  if (list) {
+    list.innerHTML = '';
+    guide.steps.forEach(step => {
+      const li = document.createElement('li');
+      li.textContent = step;
+      list.appendChild(li);
+    });
+  }
+
+  document.querySelectorAll('.scenario-chip-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.incident === incidentType);
+  });
+}
+
+/**
+ * Shows the user-controlled local Evidence Receipt modal.
+ *
+ * @param {object} result
+ */
+export function showEvidenceReceiptModal(result) {
+  const modal = receiptModal();
+  if (!modal) return;
+
+  const rawInput = websiteUrlInput()?.value || scannerTextarea()?.value || upiIntentInput()?.value || result?.url || '';
+  const receipt = generateEvidenceReceipt({
+    scanId: result?.verdictContract?.scanId || 'scn_' + Date.now().toString(36),
+    rawInput,
+    verdict: result?.verdictContract || result,
+    lang: currentLang
+  });
+  activeReceipt = receipt;
+
+  if (receiptIdDisplay()) receiptIdDisplay().textContent = receipt.receiptId;
+  if (receiptTimeDisplay()) receiptTimeDisplay().textContent = new Date(receipt.generatedAt).toLocaleString();
+  if (receiptPreviewSnippet()) receiptPreviewSnippet().textContent = receipt.sanitizedSummary || '(No text)';
+
+  const sigList = receiptSignalsList();
+  if (sigList) {
+    sigList.innerHTML = '';
+    const signals = result?.signals || [];
+    if (signals.length > 0) {
+      signals.forEach(s => {
+        const item = document.createElement('div');
+        item.style.padding = '3px 0';
+        item.textContent = `• ${s.id || s}: ${s.description || s.reason || 'Forensic detection signature'}`;
+        sigList.appendChild(item);
+      });
+    } else {
+      sigList.textContent = '• Pure on-device scan. No malicious signatures detected.';
+    }
+  }
+
+  modal.classList.remove('hidden');
 }
 
 /**
  * Resolves localized reason descriptions.
  */
-function getPlainReasons(signals = [], max = 3) {
+function getPlainReasons(signals = [], max = 4) {
   const out = [];
   for (const s of signals) {
     const id = s.id || s;
@@ -232,7 +350,7 @@ function renderQuizChallenge(result) {
   feedbackEl.textContent = '';
   quizAnswered = false;
 
-  quiz.options.forEach((opt, idx) => {
+  quiz.options.forEach((opt) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'quiz-option-btn';
@@ -268,16 +386,24 @@ function renderQuizChallenge(result) {
  */
 export async function executeScan(inputText, options = {}) {
   const text = (inputText || '').trim();
+  const errEl = inputErrorMsg();
+  const progressBar = scanProgressBar();
+
   if (!text) {
-    alert(UI[currentLang]?.nothingToCheck || 'Please enter a URL or message to scan.');
+    if (errEl) {
+      errEl.textContent = UI[currentLang]?.nothingToCheck || 'Please enter a URL or message to scan.';
+      errEl.classList.remove('hidden');
+    }
     return;
   }
+
+  if (errEl) errEl.classList.add('hidden');
+  if (progressBar) progressBar.classList.remove('hidden');
 
   // Display loading on badge
   const badge = verdictScoreBadge();
   if (badge) badge.textContent = '...';
 
-  // Run online verification with local fallback
   let result;
   try {
     result = await verifyUrlAndMessageOnline(text, {
@@ -287,6 +413,15 @@ export async function executeScan(inputText, options = {}) {
   } catch (_) {
     // Pure offline fallback
     result = scanText(text, { brandsList: cachedBrands });
+  } finally {
+    if (progressBar) progressBar.classList.add('hidden');
+  }
+
+  if (result?.verdictContract) {
+    const contractValidation = validateVerdictContract(result.verdictContract);
+    if (!contractValidation.valid) {
+      console.warn('[Verity] Verdict contract validation warnings:', contractValidation.errors);
+    }
   }
 
   lastScanResult = result;
@@ -303,25 +438,66 @@ function renderVerdict(result) {
   const badge = verdictScoreBadge();
   const rList = reasonsList();
   const banner = upiTrapBanner();
+  const catTag = verdictCategoryTag();
+  const safeTextEl = safeActionText();
+  const btnRec = btnOpenRecovery();
 
   if (!card) return;
   card.classList.remove('hidden');
 
-  const severity = result.severity || (result.score >= 70 ? 'danger' : (result.score >= 35 ? 'caution' : 'safe'));
-  const score = Math.max(0, Math.min(100, Math.round(result.score || 0)));
+  const isAbstain = result?.verdictContract?.riskClassification === 'ABSTAIN';
+  const severity = isAbstain
+    ? 'caution'
+    : (result.severity || (result.score >= 70 ? 'danger' : (result.score >= 35 ? 'caution' : 'safe')));
+  const score = isAbstain ? 0 : Math.max(0, Math.min(100, Math.round(result.score || 0)));
 
-  card.className = `verdict-card ${severity}`;
+  card.className = `verdict-card ${severity} ${isAbstain ? 'abstain-card' : ''}`;
 
   if (icon) {
-    icon.textContent = severity === 'danger' ? '🔴' : (severity === 'caution' ? '🟡' : '🟢');
+    icon.textContent = isAbstain ? '⚪' : (severity === 'danger' ? '🔴' : (severity === 'caution' ? '🟡' : '🟢'));
   }
 
   if (title) {
-    title.textContent = STATUS[currentLang]?.[severity] || STATUS.en[severity];
+    title.textContent = isAbstain
+      ? (UI[currentLang]?.abstainStatus || 'INSUFFICIENT EVIDENCE (UNVERIFIED)')
+      : (STATUS[currentLang]?.[severity] || STATUS.en[severity]);
   }
 
   if (badge) {
-    badge.textContent = `${score}/100`;
+    badge.textContent = isAbstain ? 'ABSTAIN' : `${score}/100`;
+  }
+
+  // Category Tag
+  if (catTag) {
+    if (isAbstain) {
+      catTag.textContent = 'INSUFFICIENT FORENSIC EVIDENCE';
+    } else {
+      const rawCategory = result?.verdictContract?.threatCategory || '';
+      catTag.textContent = rawCategory ? rawCategory.replace(/_/g, ' ').toUpperCase() : 'ANALYZED INTERACTION';
+    }
+  }
+
+  // Safe Action Guidance
+  if (safeTextEl) {
+    const safeNext = result?.verdictContract?.recommendedAction?.safeNextStep ||
+      (isAbstain
+        ? 'Insufficient evidence to verify this interaction. Exercise caution and verify identity directly before proceeding.'
+        : (score >= 70
+          ? 'Do not approve this request, enter passwords, or install downloads. Close this page.'
+          : (score >= 35
+            ? 'Exercise caution. Verify destination domain and identity before entering credentials.'
+            : 'Interaction appears consistent with known legitimate patterns. Proceed normally.')));
+    safeTextEl.textContent = safeNext;
+  }
+
+  // Show/Hide Recovery trigger button on danger or caution
+  if (btnRec) {
+    if (severity === 'danger' || severity === 'caution' || score >= 35) {
+      btnRec.classList.remove('hidden');
+      btnRec.textContent = UI[currentLang]?.recoveryButton || '🚨 Already Acted or Sent Money? Open Recovery Guide';
+    } else {
+      btnRec.classList.add('hidden');
+    }
   }
 
   // Reasons list
@@ -338,7 +514,7 @@ function renderVerdict(result) {
 
   // UPI trap banner
   if (banner) {
-    const isUpiTrap = (result.signals || []).some(s => s.id === 'SIG_UPI_QR_COLLECT_TRAP');
+    const isUpiTrap = (result.signals || []).some(s => (s.id || s) === 'SIG_UPI_QR_COLLECT_TRAP');
     if (isUpiTrap) {
       banner.classList.remove('hidden');
       banner.textContent = '⚠️ UPI DEDUCTION TRAP: Scanning this QR will DEDUCT money from your account, not credit it!';
@@ -402,14 +578,15 @@ export async function unrollRedirectTrace(targetUrl) {
 
       const urlEl = document.createElement('span');
       urlEl.className = 'hop-url';
-      urlEl.textContent = hop;
+      urlEl.textContent = typeof hop === 'string' ? hop : hop.url;
 
       cardEl.appendChild(idxEl);
       cardEl.appendChild(urlEl);
       list.appendChild(cardEl);
     });
 
-    executeScan(hops[hops.length - 1] || url);
+    const finalHop = hops[hops.length - 1];
+    executeScan(typeof finalHop === 'string' ? finalHop : finalHop.url);
   } catch (_) {
     list.innerHTML = `<div class="hop-card">${url} (direct)</div>`;
     executeScan(url);
@@ -429,7 +606,6 @@ export async function handleQrFile(file) {
   }
 
   try {
-    // If native BarcodeDetector API is supported
     if ('BarcodeDetector' in window) {
       const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
       const img = await createImageBitmap(file);
@@ -444,7 +620,6 @@ export async function handleQrFile(file) {
     }
   } catch (_) {}
 
-  // Fallback / simulation notification
   if (notice) {
     notice.textContent = `QR image "${file.name}" loaded. Simulating UPI safety verification...`;
   }
@@ -527,6 +702,22 @@ export function setLanguage(langCode) {
     btn.setAttribute('aria-selected', isSel ? 'true' : 'false');
   });
 
+  // Update localized text strings
+  const strings = UI[langCode] || UI.en;
+  if ($('btn-scan-website')) $('btn-scan-website').textContent = strings.checkButton || 'Deep-Scan Website & Online Identity';
+  if ($('btn-check')) $('btn-check').textContent = strings.checkButton || 'Verify Message & Intent';
+  if ($('btn-scan-payment')) $('btn-scan-payment').textContent = strings.checkButton || 'Verify Payment & UPI Safety';
+  if ($('golden-title')) $('golden-title').textContent = strings.goldenRuleTitle || 'Golden Safety Rule';
+  if ($('why-summary')) $('why-summary').textContent = strings.whyTitle || 'How did we catch this?';
+  if ($('privacy-line')) $('privacy-line').textContent = strings.privacyLine || 'Everything is checked on your device. Nothing is uploaded.';
+  if ($('safe-action-heading')) $('safe-action-heading').textContent = `🛡️ ${strings.safeNextStepTitle || 'Recommended Safe Next Step'}`;
+
+  // Update tabs
+  if ($('tab-btn-recovery')) $('tab-btn-recovery').textContent = strings.recoveryTab || '🆘 Recovery & 1930';
+
+  // Rerender active recovery steps
+  renderRecoverySteps(currentIncidentType);
+
   // Re-render verdict if active
   if (lastScanResult) {
     renderVerdict(lastScanResult);
@@ -535,7 +726,6 @@ export function setLanguage(langCode) {
 
 /**
  * Native Android Bridge interface.
- * Exposes window.VerityAndroidBridge.onIncomingIntent(payload) for Android Activity / Service.
  */
 export function initAndroidBridge() {
   window.VerityAndroidBridge = {
@@ -554,7 +744,6 @@ export function initAndroidBridge() {
       data = data.trim();
       if (!data) return;
 
-      // Intelligent routing to appropriate shield
       if (type === 'payment' || data.startsWith('upi://') || /pay\s|qr|checkout/i.test(data)) {
         switchToolTab('payment');
         if (upiIntentInput()) upiIntentInput().value = data;
@@ -591,7 +780,7 @@ export function initApp() {
   if (btnScanWeb) {
     btnScanWeb.addEventListener('click', () => {
       const input = websiteUrlInput();
-      if (input && input.value) executeScan(input.value);
+      if (input) executeScan(input.value);
     });
   }
 
@@ -599,7 +788,7 @@ export function initApp() {
   if (btnUnroll) {
     btnUnroll.addEventListener('click', () => {
       const input = websiteUrlInput();
-      if (input && input.value) unrollRedirectTrace(input.value);
+      if (input) unrollRedirectTrace(input.value);
     });
   }
 
@@ -608,7 +797,7 @@ export function initApp() {
   if (btnChk) {
     btnChk.addEventListener('click', () => {
       const area = scannerTextarea();
-      if (area && area.value) executeScan(area.value);
+      if (area) executeScan(area.value);
     });
   }
 
@@ -617,7 +806,7 @@ export function initApp() {
   if (btnScanPay) {
     btnScanPay.addEventListener('click', () => {
       const input = upiIntentInput();
-      if (input && input.value) executeScan(input.value, { isPaymentPage: true });
+      if (input) executeScan(input.value, { isPaymentPage: true });
     });
   }
 
@@ -661,13 +850,87 @@ export function initApp() {
     });
   });
 
-  // 8. Load Brands
+  // 8. Recovery Incident Selection Chips
+  document.querySelectorAll('.scenario-chip-btn').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const incident = chip.dataset.incident;
+      if (incident) renderRecoverySteps(incident);
+    });
+  });
+
+  // 9. Action Card Buttons
+  if (btnOpenRecovery()) {
+    btnOpenRecovery().addEventListener('click', () => {
+      switchToolTab('recovery');
+      panelRecovery()?.scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+
+  if (btnGenerateReceipt()) {
+    btnGenerateReceipt().addEventListener('click', () => {
+      showEvidenceReceiptModal(lastScanResult);
+    });
+  }
+
+  // 10. Evidence Receipt Modal actions
+  if (btnCloseReceipt()) {
+    btnCloseReceipt().addEventListener('click', () => {
+      receiptModal()?.classList.add('hidden');
+    });
+  }
+
+  if (btnCopyReceipt()) {
+    btnCopyReceipt().addEventListener('click', async () => {
+      if (activeReceipt && activeReceipt.markdownExport) {
+        try {
+          await navigator.clipboard.writeText(activeReceipt.markdownExport);
+          btnCopyReceipt().textContent = '✅ Copied!';
+          setTimeout(() => {
+            if (btnCopyReceipt()) btnCopyReceipt().textContent = '📋 Copy to Clipboard';
+          }, 2000);
+        } catch (_) {
+          alert('Unable to copy automatically. Please select text manually.');
+        }
+      }
+    });
+  }
+
+  if (btnDownloadReceipt()) {
+    btnDownloadReceipt().addEventListener('click', () => {
+      if (activeReceipt && activeReceipt.markdownExport) {
+        const blob = new Blob([activeReceipt.markdownExport], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${activeReceipt.receiptId}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    });
+  }
+
+  // 11. Offline Status Monitoring
+  const updateOnlineStatus = () => {
+    const isOnline = navigator.onLine;
+    const offEl = offlineIndicator();
+    if (offEl) offEl.classList.toggle('hidden', isOnline);
+  };
+  window.addEventListener('online', updateOnlineStatus);
+  window.addEventListener('offline', updateOnlineStatus);
+  updateOnlineStatus();
+
+  // 12. Load Brands
   loadBrands();
 
-  // 9. Android Bridge
+  // 13. Android Bridge
   initAndroidBridge();
 
-  // 10. Web Share Target Handling
+  // 14. Initial Recovery Guide Render
+  renderRecoverySteps('APPROVED_PAYMENT_OR_TRANSFERRED');
+
+  // 15. Web Share Target Handling
   if (typeof window !== 'undefined' && window.location?.search) {
     const params = new URLSearchParams(window.location.search);
     const sharedText = [params.get('text'), params.get('url'), params.get('title')].filter(Boolean).join(' ').trim();
@@ -681,7 +944,7 @@ export function initApp() {
     }
   }
 
-  // 11. Register Service Worker
+  // 16. Register Service Worker
   if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
@@ -702,6 +965,8 @@ export default {
   handleQrFile,
   switchToolTab,
   setLanguage,
+  renderRecoverySteps,
+  showEvidenceReceiptModal,
   initAndroidBridge,
   initApp
 };

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0.0",
+  "packId": "staging-pack-seq-1",
+  "sequence": 1,
+  "issuer": "verity-staging-authority",
+  "keyId": "staging-ed25519-key-2026",
+  "createdAt": "2026-10-25T13:29:34.764Z",
+  "expiresAt": "2026-11-01T13:29:34.764Z",
+  "indicators": [
+    {
+      "type": "domain",
+      "value": "sbi-reward-claim-portal.invalid",
+      "threatCategory": "fake_refund_cashback_reward",
+      "severity": "HIGH_RISK",
+      "confidence": 0.98,
+      "provenance": "staging-fixture-cert-in",
+      "action": "block"
+    },
+    {
+      "type": "vpa",
+      "value": "electricity-bill-refund@ybl",
+      "threatCategory": "upi_collect_payment_deception",
+      "severity": "HIGH_RISK",
+      "confidence": 0.96,
+      "provenance": "staging-fixture-npci",
+      "action": "block"
+    },
+    {
+      "type": "phone",
+      "value": "+919988776655",
+      "threatCategory": "digital_arrest_extortion",
+      "severity": "HIGH_RISK",
+      "confidence": 0.99,
+      "provenance": "staging-fixture-i4c",
+      "action": "block"
+    }
+  ],
+  "revocations": [],
+  "signature": "8eb4c13573ee01404efe9cb182d9a8597de9b80b30df9077ec468f771360344b07a7f881819584510218463d31649c4ce47cdfdd428efe009f1f38493e0bd405"
+}

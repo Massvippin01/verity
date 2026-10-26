@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <meta name="theme-color" content="#0b0f19">
   <meta name="description" content="Zero-install on-device Indian cyber fraud, WhatsApp scam, UPI QR trap & live website forensics lab">
-  <title>Verity Shield: Citizen Cyber Lab</title>
+  <title>Verity Shield: Citizen Cyber Safety & Recovery Lab</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -26,30 +26,52 @@
         <h1 class="brand-title">🛡️ Verity Shield</h1>
       </div>
       <nav class="lang-nav" role="tablist" aria-label="Select Language">
-        <button type="button" role="tab" class="lang-btn active" data-lang="en" aria-selected="true">EN</button>
-        <button type="button" role="tab" class="lang-btn" data-lang="ta" aria-selected="false">தமிழ்</button>
-        <button type="button" role="tab" class="lang-btn" data-lang="hi" aria-selected="false">हिं</button>
-        <button type="button" role="tab" class="lang-btn" data-lang="te" aria-selected="false">తె</button>
+        <button type="button" role="tab" class="lang-btn active" data-lang="en" aria-selected="true" id="lang-btn-en">EN</button>
+        <button type="button" role="tab" class="lang-btn" data-lang="ta" aria-selected="false" id="lang-btn-ta">தமிழ்</button>
+        <button type="button" role="tab" class="lang-btn" data-lang="hi" aria-selected="false" id="lang-btn-hi">हिं</button>
+        <button type="button" role="tab" class="lang-btn" data-lang="te" aria-selected="false" id="lang-btn-te">తె</button>
       </nav>
     </header>
 
-    <!-- 3 Core Shields Navigation -->
-    <nav class="tool-nav" role="tablist" aria-label="Cyber Lab Tools">
+    <!-- Upfront Privacy Disclosure Banner -->
+    <div class="privacy-card" role="region" aria-label="Privacy Disclosure">
+      <span class="privacy-card-icon" aria-hidden="true">🔒</span>
+      <div class="privacy-card-content" id="privacy-card-content">
+        <strong>100% On-Device Inspection:</strong> Your messages, passwords, and banking inputs never leave your device. Anonymous DNS checks are only used for unfamiliar links.
+      </div>
+    </div>
+
+    <!-- Offline Mode Indicator -->
+    <div id="offline-indicator" class="input-error-msg hidden" style="background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.4); color: #38bdf8;" role="status" aria-live="polite">
+      ⚡ Offline Mode Active: Running pure on-device heuristics with zero network connectivity.
+    </div>
+
+    <!-- 4 Core Navigation Tabs (including Recovery Mode) -->
+    <nav class="tool-nav" role="tablist" aria-label="Cyber Safety Shields">
       <button type="button" role="tab" class="tool-tab-btn active" id="tab-btn-website" data-tool="website" aria-selected="true">
-        🌐 Website Deep-Scanner
+        🌐 Website
       </button>
       <button type="button" role="tab" class="tool-tab-btn" id="tab-btn-message" data-tool="message" aria-selected="false">
-        💬 WhatsApp & SMS Scam
+        💬 Message & SMS
       </button>
       <button type="button" role="tab" class="tool-tab-btn" id="tab-btn-payment" data-tool="payment" aria-selected="false">
-        💳 UPI & Payment Safety
+        💳 UPI & QR
+      </button>
+      <button type="button" role="tab" class="tool-tab-btn" id="tab-btn-recovery" data-tool="recovery" aria-selected="false" style="color: #f87171;">
+        🆘 Recovery & 1930
       </button>
     </nav>
+
+    <!-- Loading Progress Bar -->
+    <div id="scan-progress-bar" class="scan-progress-bar hidden" role="progressbar" aria-label="Analyzing safety indicators" aria-busy="true"></div>
+
+    <!-- Inline Accessible Error Alert -->
+    <div id="input-error-msg" class="input-error-msg hidden" role="alert" aria-live="polite"></div>
 
     <!-- SHIELD 1: Live Website & Redirect Deep-Scanner -->
     <section id="panel-website" class="tool-panel" role="tabpanel" aria-labelledby="tab-btn-website">
       <div class="demo-section">
-        <span class="section-label">Website Scenario Simulations</span>
+        <span class="section-label">Website Scenarios</span>
         <div class="chips-scroll" role="toolbar" aria-label="Website Scenarios">
           <button type="button" class="chip-btn" data-demo-web="compromised_cms">🚨 Hacked WordPress Phish</button>
           <button type="button" class="chip-btn" data-demo-web="rotator_redirect">⛓️ Malvertising Redirect Chain</button>
@@ -83,7 +105,7 @@
     <!-- SHIELD 2: WhatsApp & SMS Scam Verifier -->
     <section id="panel-message" class="tool-panel hidden" role="tabpanel" aria-labelledby="tab-btn-message">
       <div class="demo-section">
-        <span class="section-label">Message Scam Demos</span>
+        <span class="section-label">Message Scam Scenarios</span>
         <div class="chips-scroll" role="toolbar" aria-label="Sample message scams">
           <button type="button" class="chip-btn" data-demo-msg="digital_arrest">👮 CBI Digital Arrest Extortion</button>
           <button type="button" class="chip-btn" data-demo-msg="sbi_kyc">🏦 Fake SBI KYC Account Block</button>
@@ -108,7 +130,7 @@
     <!-- SHIELD 3: UPI QR & Payment Safety Verifier -->
     <section id="panel-payment" class="tool-panel hidden" role="tabpanel" aria-labelledby="tab-btn-payment">
       <div class="demo-section">
-        <span class="section-label">Payment Safety Demos</span>
+        <span class="section-label">Payment Safety Scenarios</span>
         <div class="chips-scroll" role="toolbar" aria-label="Payment scenarios">
           <button type="button" class="chip-btn" data-demo-pay="olx_qr">💸 OLX UPI Receive Trap (Scam)</button>
           <button type="button" class="chip-btn" data-demo-pay="illegal_pin">🔑 Illegal Web PIN Harvest (Scam)</button>
@@ -145,19 +167,102 @@
       </div>
     </section>
 
+    <!-- SHIELD 4: Citizen Recovery Mode & 1930 Helpline -->
+    <section id="panel-recovery" class="tool-panel hidden" role="tabpanel" aria-labelledby="tab-btn-recovery">
+      <div class="recovery-panel">
+        <!-- Emergency Golden Hour Callout -->
+        <div class="emergency-callout">
+          <div class="emergency-callout-top">
+            <span class="emergency-title">🚨 Golden Hour Emergency Action</span>
+            <a href="tel:1930" class="btn-call-1930">📞 Call 1930</a>
+          </div>
+          <p class="emergency-desc">
+            If money was transferred in the last 2 hours, calling National Cyber Crime Helpline <strong>1930</strong> immediately allows the Indian Cyber Crime Coordination Centre (I4C) to freeze transiting funds.
+          </p>
+        </div>
+
+        <!-- Incident Type Scenario Selector -->
+        <div class="recovery-scenario-picker">
+          <span class="section-label">Select what happened to view immediate steps:</span>
+          <div class="scenario-chips-grid" role="group" aria-label="Incident type selection">
+            <button type="button" class="scenario-chip-btn active" data-incident="APPROVED_PAYMENT_OR_TRANSFERRED">💸 Sent Money / Transferred</button>
+            <button type="button" class="scenario-chip-btn" data-incident="SHARED_OTP_OR_PIN">🔢 Shared OTP or UPI PIN</button>
+            <button type="button" class="scenario-chip-btn" data-incident="ENTERED_PASSWORD">🔑 Entered Account Password</button>
+            <button type="button" class="scenario-chip-btn" data-incident="ENTERED_PAYMENT_DETAILS">💳 Entered Card / CVV Details</button>
+            <button type="button" class="scenario-chip-btn" data-incident="INSTALLED_SUSPICIOUS_APP">📱 Installed Suspicious APK / App</button>
+            <button type="button" class="scenario-chip-btn" data-incident="EXTORTION_OR_DIGITAL_ARREST">👮 Digital Arrest / Extortion Threat</button>
+            <button type="button" class="scenario-chip-btn" data-incident="GRANTED_REMOTE_ACCESS_OR_ACCESSIBILITY">💻 Granted Remote Access (AnyDesk)</button>
+            <button type="button" class="scenario-chip-btn" data-incident="SHARED_IDENTITY_DOCUMENTS">🪪 Shared Aadhaar / PAN Copy</button>
+            <button type="button" class="scenario-chip-btn" data-incident="CLICKED_SUSPICIOUS_LINK">🔗 Only Clicked Link (No details)</button>
+            <button type="button" class="scenario-chip-btn" data-incident="UNCERTAIN_WHAT_HAPPENED">❓ Uncertain What Happened</button>
+          </div>
+        </div>
+
+        <!-- Priority Steps Checklist Card -->
+        <div class="recovery-checklist-card">
+          <div class="recovery-checklist-title" id="recovery-checklist-heading">
+            <span>🛡️ Immediate Recovery Steps</span>
+          </div>
+          <ol class="recovery-steps-ol" id="recovery-steps-list">
+            <!-- Populated dynamically via recovery-advisor.js -->
+          </ol>
+          <div class="official-links-row" id="recovery-official-links">
+            <a href="https://cybercrime.gov.in" target="_blank" rel="noopener noreferrer" class="official-link-pill">🏛️ cybercrime.gov.in</a>
+            <a href="https://sancharsaathi.gov.in" target="_blank" rel="noopener noreferrer" class="official-link-pill">📡 Sanchar Saathi / Chakshu</a>
+            <a href="https://myaadhaar.uidai.gov.in" target="_blank" rel="noopener noreferrer" class="official-link-pill">🔒 UIDAI Biometric Lock</a>
+          </div>
+        </div>
+
+        <!-- Bank Emergency Directory -->
+        <details class="why-accordion" style="margin-top: 4px;">
+          <summary class="why-summary">🏦 Major Bank 24x7 Emergency Freeze Helplines</summary>
+          <div class="why-body" style="font-size: 0.8125rem; line-height: 1.6;">
+            <p><strong>SBI:</strong> 1800-1234 / SMS <code>BLOCK &lt;last 4 digits&gt;</code> to 567676</p>
+            <p><strong>HDFC Bank:</strong> 1800-202-6161 / SMS <code>BLOCK &lt;last 4 digits&gt;</code> to 5676712</p>
+            <p><strong>ICICI Bank:</strong> 1800-1080 / SMS <code>BLOCK &lt;last 4 digits&gt;</code> to 9215676766</p>
+            <p><strong>Axis Bank:</strong> 1860-419-5555 / SMS <code>BLOCKCARD &lt;last 4 digits&gt;</code> to 56161600</p>
+            <p><strong>PNB:</strong> 1800-180-2222 / SMS <code>HOT &lt;card number&gt;</code> to 5607040</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
     <div id="qr-notice" class="qr-notice hidden" role="status" aria-live="polite"></div>
 
-    <!-- Unified Verdict Traffic Light Card -->
+    <!-- Explainable Scam Action Card (Traffic Light System) -->
     <section id="verdict-card" class="verdict-card hidden" role="status" aria-live="polite">
       <div class="verdict-top">
         <div class="verdict-status-wrap">
           <span class="verdict-icon" id="verdict-icon" aria-hidden="true">🟢</span>
-          <span class="verdict-title" id="verdict-title">SAFE</span>
+          <div>
+            <div class="verdict-title" id="verdict-title">SAFE</div>
+            <div id="verdict-category-tag" class="verdict-category-tag">BENIGN INTERACTION</div>
+          </div>
         </div>
         <span class="verdict-score-badge" id="verdict-score-badge">0/100</span>
       </div>
 
       <div id="upi-trap-banner" class="upi-trap-banner hidden"></div>
+
+      <!-- Safe Next-Step Action Guidance Box -->
+      <div class="safe-action-box" id="safe-action-box">
+        <div class="safe-action-heading" id="safe-action-heading">
+          <span>🛡️ Recommended Safe Next Step</span>
+        </div>
+        <div class="safe-action-text" id="safe-action-text">
+          Verified safe. You may proceed normally.
+        </div>
+      </div>
+
+      <!-- Citizen Action Buttons: Recovery Mode & Evidence Receipt -->
+      <div class="action-buttons-row">
+        <button type="button" id="btn-open-recovery" class="btn-recovery-trigger hidden">
+          🚨 Already Acted or Sent Money? Open Recovery Guide
+        </button>
+        <button type="button" id="btn-generate-receipt" class="btn-receipt-trigger">
+          📋 Generate Sanitized Evidence Receipt
+        </button>
+      </div>
 
       <!-- Online Keyless Intelligence Proof Steps -->
       <div id="proof-steps-card" class="proof-steps-card hidden">
@@ -195,6 +300,35 @@
       <p class="privacy-line" id="privacy-line">Everything is checked on your device. Nothing is uploaded.</p>
       <p class="engine-note">Verity Bharat Shield · Pure On-Device Heuristics & Keyless Public Online Intelligence</p>
     </footer>
+  </div>
+
+  <!-- Sanitized Evidence Receipt Modal Dialog -->
+  <div id="receipt-modal" class="receipt-modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="receipt-modal-title">
+    <div class="receipt-modal">
+      <div class="receipt-modal-header">
+        <span class="receipt-modal-title" id="receipt-modal-title">📋 Citizen Evidence Receipt</span>
+        <button type="button" id="btn-close-receipt" class="receipt-close-btn" aria-label="Close dialog">✕</button>
+      </div>
+      <div class="receipt-modal-body">
+        <div class="receipt-badge-row">
+          <span class="receipt-id-tag" id="receipt-id-display">REC-XXXX</span>
+          <span id="receipt-time-display" style="color: #94a3b8; font-size: 0.75rem;">Timestamp</span>
+        </div>
+        <p style="color: #cbd5e1;">This receipt contains sanitized technical indicators ready to attach to your complaint on <strong>cybercrime.gov.in</strong> or when calling <strong>1930</strong>.</p>
+        <div>
+          <span class="section-label">Sanitized Incident Snippet (Secrets Masked):</span>
+          <div id="receipt-preview-snippet" class="receipt-preview-box"></div>
+        </div>
+        <div>
+          <span class="section-label">Observed Forensic Signatures:</span>
+          <div id="receipt-signals-list" style="margin-top: 4px; color: #f1f5f9; font-size: 0.8125rem;"></div>
+        </div>
+      </div>
+      <div class="receipt-modal-footer">
+        <button type="button" id="btn-copy-receipt" class="btn-secondary" style="padding: 8px 12px; font-size: 0.8125rem;">📋 Copy to Clipboard</button>
+        <button type="button" id="btn-download-receipt" class="btn-check" style="padding: 8px 12px; font-size: 0.8125rem;">⬇️ Download (.md)</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="scanner.js"></script>

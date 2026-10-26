@@ -32,6 +32,7 @@ import { goldenRuleForSignal } from './citizen-messages.js';
 import * as defaultPsl from './psl.js';
 import { classifyTextWithSubwordAi } from './ai-nlp-classifier.js';
 import { computeSecvIntentVector } from './secv-intent-engine.js';
+import { createVerdict, createAbstentionVerdict } from './verdict-contract.js';
 
 /**
  * Parses a upi://pay URI and inspects whether it represents a deceptive collect/deduct trap.
@@ -194,6 +195,7 @@ export function extractUrls(text) {
  */
 export function scanText(input, options = {}) {
   // Safe default output for empty or invalid input
+  const defaultContract = createAbstentionVerdict('message', 'UNSUPPORTED_INPUT', 'No input provided for scanning.');
   const defaultResult = {
     verdict: 'safe',
     score: 0,
@@ -203,7 +205,8 @@ export function scanText(input, options = {}) {
       upi: null,
       apkNames: []
     },
-    goldenRuleKey: 'generic'
+    goldenRuleKey: 'generic',
+    verdictContract: defaultContract
   };
 
   if (!input || typeof input !== 'string') {
@@ -363,7 +366,11 @@ export function scanText(input, options = {}) {
     }
 
     // ── 3f. Subword N-Gram Bayesian NLP Continuous Inference ─────────────────
-    const aiNlp = classifyTextWithSubwordAi(rawText);
+    // Bypass conversational text NLP when the input is purely a raw protocol URI (e.g., upi://pay?...)
+    const isPureProtocolUri = /^upi:\/\/pay\?/i.test(rawText.trim());
+    const aiNlp = isPureProtocolUri
+      ? { isScam: false, score: 0, scamProbability: 0, dominantClass: 'SAFE_CONVERSATION' }
+      : classifyTextWithSubwordAi(rawText);
     // Coercion/extortion requires extraction action (E > 0) to constitute an actionable fraud trap
     const isCoercionWithoutExtraction = aiNlp.dominantClass === 'COERCION_EXTORTION' && secv && secv.vector.E === 0;
     if (aiNlp.isScam && aiNlp.scamProbability >= 0.78 && !isCoercionWithoutExtraction) {
@@ -547,6 +554,71 @@ export function scanText(input, options = {}) {
       }
     }
 
+    const modality = extractedUrls.length > 0 ? 'url' : (upiData ? 'payment_intent' : 'message');
+    let threatCategory = 'unsupported_or_unknown';
+    let isInsufficientEvidence = false;
+
+    if (signals.some(s => s.id === 'SIG_UPI_QR_COLLECT_TRAP' || s.id === 'SIG_NPCI_UNSIGNED_COLLECT_FORENSIC')) {
+      threatCategory = 'upi_collect_payment_deception';
+    } else if (signals.some(s => s.id === 'SIG_DIGITAL_ARREST_EXTORTION' || s.id === 'SIG_SURVEILLANCE_CAMERA_TRAP')) {
+      threatCategory = 'digital_arrest_extortion';
+    } else if (signals.some(s => s.id === 'SIG_MALICIOUS_APK_DROPPER')) {
+      threatCategory = 'malicious_application_dropper';
+    } else if (signals.some(s => s.id === 'SIG_KYC_CYBER_FRAUD')) {
+      threatCategory = 'fake_kyc_account_blocking';
+    } else if (signals.some(s => s.id === 'SIG_DOM_BRAND_IMPERSONATION' || s.id === 'RULE_BRAND_NAME_WRONG_DOMAIN')) {
+      threatCategory = 'brand_impersonation';
+    } else if (finalScore <= 20) {
+      if (extractedUrls.length > 0 || upiData) {
+        threatCategory = 'benign_legitimate_interaction';
+      } else {
+        const wordCount = rawText.split(/\s+/).filter(Boolean).length;
+        if (wordCount < 4 || rawText.length < 25) {
+          isInsufficientEvidence = true;
+          threatCategory = 'unsupported_or_unknown';
+        } else {
+          threatCategory = 'benign_legitimate_interaction';
+        }
+      }
+    }
+
+    const riskClassification = isInsufficientEvidence
+      ? 'ABSTAIN'
+      : (finalScore >= 70 ? 'HIGH_RISK' : (finalScore >= 35 ? 'CAUTION' : 'SAFE'));
+
+    const verdictContract = isInsufficientEvidence
+      ? createAbstentionVerdict(
+          modality,
+          'INSUFFICIENT_EVIDENCE',
+          'Input text contains no verifiable links, payment handles, or forensic markers to assess safety.'
+        )
+      : createVerdict({
+          inputModality: modality,
+          threatCategory,
+          riskClassification,
+          riskScore: finalScore,
+          evidence: signals,
+          humanExplanations: signals.map(s => s.id).filter(Boolean),
+          recommendedAction: {
+            safeNextStep: finalScore >= 70
+              ? 'Do not approve this request, enter passwords, or install downloads.'
+              : (finalScore >= 35
+                ? 'Exercise caution. Verify with known official contacts.'
+                : 'No overt threat detected in scanned text.'),
+            recoveryRoute: threatCategory !== 'benign_legitimate_interaction' ? threatCategory : null,
+            emergencyHelpline: '1930'
+          },
+          privacyDisclosure: {
+            localOnly: true,
+            externalLookups: [],
+            redactionsApplied: []
+          },
+          knownLimitations: [
+            'Pure on-device scan evaluates observable keywords, regular expressions, and heuristics.',
+            'Conversational social engineering without financial demands may not trigger automated thresholds.'
+          ]
+        });
+
     return {
       verdict,
       score: finalScore,
@@ -566,7 +638,8 @@ export function scanText(input, options = {}) {
       },
       aiNlp,
       secv,
-      goldenRuleKey
+      goldenRuleKey,
+      verdictContract
     };
   } catch (_) {
     return defaultResult;

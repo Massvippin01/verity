@@ -1,16 +1,16 @@
 # Verity 2.0 Core Performance Benchmarks
 
 > **Environment**: native Node, not browser WASM  
-> **Benchmark Date**: 2026-10-22  
+> **Benchmark Date**: 2026-10-25  
 > **Iterations**: 1,000 timed iterations per test (with 50-iteration warm-up)
 
 ---
 
 ## Machine Description
-- **CPU**: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics (16 logical cores)
-- **Memory**: 15.3 GB RAM
-- **Operating System**: Windows_NT 10.0.26200 (x64)
-- **Runtime**: Node.js v24.13.0
+- **CPU**: Intel(R) Core(TM) i7-6600U CPU @ 2.60GHz (4 logical cores)
+- **Memory**: 7.4 GB RAM
+- **Operating System**: Windows_NT 10.0.22621 (x64)
+- **Runtime**: Node.js v24.14.0
 - **Execution Mode**: Synchronous single-threaded client-side execution (Native Node.js runtime, zero network I/O)
 
 ---
@@ -19,11 +19,11 @@
 
 | Benchmark Target | Iterations | Mean (ms) | p50 (ms) | p95 (ms) | p99 (ms) | Min (ms) | Max (ms) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Allowlist Check** | 1,000 | **0.0058 ms** | 0.0037 ms | **0.0124 ms** | 0.0257 ms | 0.0008 ms | 0.4029 ms |
-| **16 Heuristic Rules** | 1,000 | **0.4298 ms** | 0.2767 ms | **1.1920 ms** | 1.4936 ms | 0.0236 ms | 1.7258 ms |
-| **18-Feature Extraction** | 1,000 | **0.0047 ms** | 0.0033 ms | **0.0121 ms** | 0.0155 ms | 0.0025 ms | 0.2705 ms |
-| **Full Sync Pipeline (Rules + Feats + Risk)** | 1,000 | **0.4845 ms** | 0.3855 ms | **1.2331 ms** | 1.6399 ms | 0.0338 ms | 2.3736 ms |
-| **scanText (500-char message)** | 1,000 | **0.1581 ms** | 0.1240 ms | **0.2832 ms** | 0.4226 ms | 0.0832 ms | 0.6205 ms |
+| **Allowlist Check** | 1,000 | **0.0189 ms** | 0.0138 ms | **0.0349 ms** | 0.1043 ms | 0.0038 ms | 0.7580 ms |
+| **16 Heuristic Rules** | 1,000 | **0.9121 ms** | 0.6235 ms | **2.5093 ms** | 3.5913 ms | 0.0498 ms | 5.6285 ms |
+| **18-Feature Extraction** | 1,000 | **0.0100 ms** | 0.0081 ms | **0.0156 ms** | 0.0360 ms | 0.0061 ms | 0.2334 ms |
+| **Full Sync Pipeline (Rules + Feats + Risk)** | 1,000 | **1.1711 ms** | 0.8467 ms | **3.1181 ms** | 4.7733 ms | 0.0858 ms | 43.0383 ms |
+| **scanText (500-char message)** | 1,000 | **1.1176 ms** | 0.9957 ms | **1.8507 ms** | 2.3332 ms | 0.7937 ms | 3.9438 ms |
 
 ---
 

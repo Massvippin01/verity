@@ -61,6 +61,12 @@ const coreFiles = [
   { src: 'shared/online-scam-verifier.js', dest: 'core/shared/online-scam-verifier.js' },
   { src: 'shared/secv-intent-engine.js', dest: 'core/shared/secv-intent-engine.js' },
   { src: 'shared/autonomous-brand-discovery.js', dest: 'core/shared/autonomous-brand-discovery.js' },
+  { src: 'shared/verdict-contract.js', dest: 'core/shared/verdict-contract.js' },
+  { src: 'shared/recovery-advisor.js', dest: 'core/shared/recovery-advisor.js' },
+  { src: 'shared/safe-action-policy.js', dest: 'core/shared/safe-action-policy.js' },
+  { src: 'shared/threat-pack-verifier.js', dest: 'core/shared/threat-pack-verifier.js' },
+  { src: 'shared/threat-update-manager.js', dest: 'core/shared/threat-update-manager.js' },
+  { src: 'shared/flight-recorder.js', dest: 'core/shared/flight-recorder.js' },
   { src: 'brands.json', dest: 'core/brands.json' }
 ];
 
@@ -176,6 +182,12 @@ export { generateXRayTeachingCards, parseUrlAnatomy } from './shared/xray-educat
 export { verifyUrlAndMessageOnline, verifyEntityOfficialDomainOnline } from './shared/online-scam-verifier.js';
 export { computeSecvIntentVector, normalizeVernacularPhonetics } from './shared/secv-intent-engine.js';
 export { verifyAutonomousBrandIdentity, auditDomainDmarcPosture, extractAssertedDomIdentity } from './shared/autonomous-brand-discovery.js';
+export { SCHEMA_VERSION, RULE_PACK_VERSION, createVerdict, createAbstentionVerdict, validateVerdictContract } from './shared/verdict-contract.js';
+export { OFFICIAL_RECOVERY_REGISTRY, INCIDENT_TYPES, RECOVERY_GUIDES, sanitizeSecrets, generateEvidenceReceipt, getRecoveryGuide } from './shared/recovery-advisor.js';
+export { POLICY_VERSION, ACTION_TYPES, PROHIBITED_AUTOMATIC_ACTIONS, evaluateSafeActionPolicy } from './shared/safe-action-policy.js';
+export { THREAT_PACK_SCHEMA_VERSION, ALLOWED_INDICATOR_TYPES, verifyThreatPack } from './shared/threat-pack-verifier.js';
+export { ThreatUpdateManager } from './shared/threat-update-manager.js';
+export { FLIGHT_RECORDER_VERSION, LEGAL_DISCLAIMER, FlightRecorder, sanitizeFlightRecorderSecrets } from './shared/flight-recorder.js';
 `;
 
 const textScannerReExport = `export * from './shared/text-scanner.js';\nexport { default } from './shared/text-scanner.js';\n`;

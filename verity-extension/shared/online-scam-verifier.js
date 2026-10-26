@@ -19,6 +19,8 @@ import { scanText } from './text-scanner.js';
 import { calculateRisk } from '../background/risk-engine.js';
 import { auditDomainDmarcPosture } from './autonomous-brand-discovery.js';
 import { queryFreeCtLogs, evaluateCtLogForensics, queryPhishStatsPublicFeed } from '../background/online-free-intel.js';
+import { createVerdict, createAbstentionVerdict } from './verdict-contract.js';
+import { sanitizeSecrets } from './recovery-advisor.js';
 
 export { queryPhishStatsPublicFeed, auditDomainDmarcPosture };
 
@@ -34,14 +36,29 @@ const SINKHOLE_IPS = new Set(['0.0.0.0', '127.0.0.1', '127.0.0.2']);
 export function extractDomainFromUrl(urlOrHostname) {
   if (!urlOrHostname || typeof urlOrHostname !== 'string') return '';
   let str = urlOrHostname.trim();
+  // Privacy Guard: If input has whitespace, look for a URL match within it; if none, it is conversational text
+  if (/\s/.test(str)) {
+    const urlMatch = str.match(/https?:\/\/[^\s]+|[a-zA-Z0-9-]+\.[a-zA-Z]{2,}[^\s]*/);
+    if (urlMatch) {
+      str = urlMatch[0];
+    } else {
+      return '';
+    }
+  }
   if (!/^https?:\/\//i.test(str)) {
     str = 'https://' + str;
   }
   try {
     const parsed = new URL(str);
-    return (parsed.hostname || '').toLowerCase().replace(/^www\./, '');
+    const host = (parsed.hostname || '').toLowerCase().replace(/^www\./, '');
+    if (host && (host.includes('.') || host === 'localhost') && !/\s/.test(host)) {
+      return host;
+    }
+    return '';
   } catch (_) {
-    return str.replace(/^https?:\/\//i, '').split('/')[0].split(':')[0].toLowerCase().replace(/^www\./, '');
+    const fallback = str.replace(/^https?:\/\//i, '').split('/')[0].split(':')[0].toLowerCase().replace(/^www\./, '');
+    if (fallback.includes('.') && !/\s/.test(fallback)) return fallback;
+    return '';
   }
 }
 
@@ -630,7 +647,7 @@ export async function verifyUrlAndMessageOnline(inputTextOrUrl, options = {}) {
   // 1. Identify URL or hostname
   const urlMatch = input.match(/https?:\/\/[^\s]+|[a-zA-Z0-9-]+\.[a-zA-Z]{2,}[^\s]*/);
   const targetUrl = urlMatch ? urlMatch[0] : '';
-  const hostname = extractDomainFromUrl(targetUrl || input);
+  const hostname = targetUrl ? extractDomainFromUrl(targetUrl) : (input.includes('.') && !/\s/.test(input) ? extractDomainFromUrl(input) : '');
 
   // 2. Run local core scans
   const textScan = scanText(input);
@@ -677,7 +694,9 @@ export async function verifyUrlAndMessageOnline(inputTextOrUrl, options = {}) {
   }
 
   // D. Reddit Community Corroboration
-  const queryStr = candidateEntity || hostname || input.slice(0, 40);
+  // PRIVACY SAFEGUARD: Only query confirmed brand entities or validated hostnames.
+  // NEVER send raw user messages, SMS text, or input slices to third-party endpoints.
+  const queryStr = (candidateEntity && candidateEntity.length >= 3) ? candidateEntity : (hostname || null);
   if (queryStr) {
     onlinePromises.push(checkRedditScamCorroboration(queryStr, queryOptions));
   } else {
@@ -842,6 +861,81 @@ export async function verifyUrlAndMessageOnline(inputTextOrUrl, options = {}) {
 
   const isOfflineFallback = !dohRes?.checked && !rdapRes?.checked && !entityRes?.verified && !redditRes?.checked && !dmarcRes?.hasDmarc && !phishRes?.hit;
 
+  const modality = targetUrl ? 'url' : (/upi:\/\/pay/i.test(input) ? 'payment_intent' : 'message');
+  let threatCategory = 'unsupported_or_unknown';
+  let isInsufficientEvidence = false;
+  if (allSignals.some(s => s.id === 'SIG_UPI_QR_COLLECT_TRAP' || s.id === 'SIG_NPCI_UNSIGNED_COLLECT_FORENSIC')) {
+    threatCategory = 'upi_collect_payment_deception';
+  } else if (allSignals.some(s => s.id === 'SIG_DIGITAL_ARREST_EXTORTION' || s.id === 'SIG_SURVEILLANCE_CAMERA_TRAP')) {
+    threatCategory = 'digital_arrest_extortion';
+  } else if (allSignals.some(s => s.id === 'SIG_MALICIOUS_APK_DROPPER')) {
+    threatCategory = 'malicious_application_dropper';
+  } else if (allSignals.some(s => s.id === 'SIG_KYC_CYBER_FRAUD')) {
+    threatCategory = 'fake_kyc_account_blocking';
+  } else if (allSignals.some(s => s.id === 'SIG_DOM_BRAND_IMPERSONATION' || s.id === 'RULE_BRAND_NAME_WRONG_DOMAIN')) {
+    threatCategory = 'brand_impersonation';
+  } else if (allSignals.some(s => s.id === 'SIG_AITM_REVERSE_PROXY_PHISH' || s.id === 'SIG_BITB_FAKE_WINDOW_ATTACK')) {
+    threatCategory = 'phishing_credential_harvesting';
+  } else if (finalScore <= 20) {
+    if (targetUrl || /upi:\/\/pay/i.test(input)) {
+      threatCategory = 'benign_legitimate_interaction';
+    } else {
+      const wordCount = (input || '').trim().split(/\s+/).filter(Boolean).length;
+      if (wordCount < 4 || (input || '').trim().length < 25) {
+        isInsufficientEvidence = true;
+        threatCategory = 'unsupported_or_unknown';
+      } else {
+        threatCategory = 'benign_legitimate_interaction';
+      }
+    }
+  }
+
+  const riskClassification = isInsufficientEvidence
+    ? 'ABSTAIN'
+    : (finalScore >= 70 ? 'HIGH_RISK' : (finalScore >= 35 ? 'CAUTION' : 'SAFE'));
+
+  const verdictContract = isInsufficientEvidence
+    ? createAbstentionVerdict(
+        modality,
+        'INSUFFICIENT_EVIDENCE',
+        'Input text contains no verifiable links, payment handles, or forensic markers to assess safety.'
+      )
+    : createVerdict({
+    inputModality: modality,
+    threatCategory,
+    riskClassification,
+    riskScore: finalScore,
+    evidence: allSignals,
+    humanExplanations: allSignals.map(s => s.reason || s.description || s.id).filter(Boolean),
+    recommendedAction: {
+      safeNextStep: finalScore >= 70
+        ? 'Do not approve this request, enter passwords, or install downloads. Close this page.'
+        : (finalScore >= 35
+          ? 'Exercise caution. Verify the destination domain and identity before entering details.'
+          : 'Interaction appears consistent with known legitimate patterns.'),
+      recoveryRoute: threatCategory !== 'benign_legitimate_interaction' ? threatCategory : null,
+      emergencyHelpline: '1930'
+    },
+    privacyDisclosure: {
+      localOnly: isOfflineFallback,
+      externalLookups: isOfflineFallback ? [] : [
+        ...(hostname ? [{ service: 'Cloudflare/Quad9 DoH', transmittedData: 'Domain hostname only', purpose: 'Sinkhole / malware reputation' }] : []),
+        ...(hostname ? [{ service: 'ICANN RDAP', transmittedData: 'Registered domain only', purpose: 'Domain age audit' }] : []),
+        ...(candidateEntity ? [{ service: 'Wikidata', transmittedData: 'Brand entity name', purpose: 'Official domain verification' }] : [])
+      ],
+      redactionsApplied: ['Passwords, OTPs, PINs, Aadhaar, and payment cards stripped']
+    },
+    knownLimitations: [
+      'PWA operates in standard browser sandbox without full native device inspection.',
+      'Public online reputation checks are rate-limited and fall back to local heuristics when unreachable.'
+    ],
+    metadata: {
+      isOfflineFallback,
+      targetUrl,
+      sanitizedInput: sanitizeSecrets(input.slice(0, 100))
+    }
+  });
+
   return {
     url: targetUrl,
     inputText: input,
@@ -853,7 +947,8 @@ export async function verifyUrlAndMessageOnline(inputTextOrUrl, options = {}) {
     entityVerification: entityRes,
     dohResult: dohRes,
     rdapResult: rdapRes,
-    isOfflineFallback
+    isOfflineFallback,
+    verdictContract
   };
 }
 
