@@ -244,9 +244,47 @@ export function runNeuralMetaFusion(featureVectorObj = {}) {
   };
 }
 
+export const MODEL_CALIBRATION_METADATA = Object.freeze({
+  modelName: 'Verity-NeuralMetaFusion-MLP',
+  version: '2.4.0',
+  architecture: '18 -> 12 -> 1',
+  inputFeaturesCount: 18,
+  activeRuntimeFeatures: [
+    'urlOnnxProb',
+    'markovAnomalyProb',
+    'shannonEntropyNorm',
+    'domCosinePhishSim',
+    'hasCredentialInputs',
+    'nlpScamProb',
+    'domainNewnessDecay',
+    'cnameOrFreeHostCloak',
+    'redirectVelocityNorm',
+    'brandProximityNorm'
+  ],
+  extendedPillarFeatures: [
+    'deadLinkRatio',
+    'externalLinkRatio',
+    'externalMediaRatio',
+    'credWeight',
+    'formMismatch',
+    'brandClaim',
+    'secvCoercionSynergy',
+    'npciUnsignedRisk'
+  ],
+  activationHidden: 'ReLU',
+  activationOutput: 'Sigmoid',
+  calibrationBaseline: {
+    phishingCentroidNorm: 1.487,
+    legitimateCentroidNorm: 0.183,
+    decisionThresholdThreat: 0.82,
+    decisionThresholdHardOverride: 0.85
+  }
+});
+
 export default {
   PHISHING_FACADE_CENTROID,
   LEGITIMATE_PORTAL_CENTROID,
+  MODEL_CALIBRATION_METADATA,
   cosineSimilarity,
   computeDomTopologyVector,
   runNeuralMetaFusion

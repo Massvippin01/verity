@@ -1,11 +1,16 @@
 /**
- * sw.js — Cache-First Offline Service Worker for Verity Mobile Scanner PWA
+ * sw.js — Hardened Cache-First Offline Service Worker for Verity Mobile Scanner PWA
  *
- * Pre-caches the app shell and core engine. Works 100% offline with zero analytics
- * and zero external network calls.
+ * Pre-caches the app shell and core forensic engine.
+ * Works 100% offline with zero external network dependencies, zero telemetry.
+ * Hardened with:
+ * 1. Strict versioned cache pruning on activation
+ * 2. Origin & protocol validation (same-origin / HTTPS only)
+ * 3. Content-Type verification before caching dynamic responses
  */
 
-const CACHE_NAME = 'verity-mobile-v3';
+const CACHE_VERSION = 'v4';
+const CACHE_NAME = `verity-mobile-${CACHE_VERSION}`;
 
 const PRECACHE_ASSETS = [
   './',
@@ -38,6 +43,20 @@ const PRECACHE_ASSETS = [
   './core/shared/online-scam-verifier.js'
 ];
 
+// Valid content types allowed to enter the persistent PWA cache
+const ALLOWED_CONTENT_TYPES = [
+  'text/html',
+  'text/css',
+  'application/javascript',
+  'text/javascript',
+  'application/json',
+  'image/png',
+  'image/jpeg',
+  'image/svg+xml',
+  'image/webp',
+  'application/manifest+json'
+];
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -51,7 +70,8 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME) {
+          // Strict pruning: delete all stale verity caches
+          if (key.startsWith('verity-mobile-') && key !== CACHE_NAME) {
             return caches.delete(key);
           }
         })
@@ -83,12 +103,41 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (event.request.method !== 'GET') return;
+
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
         return cachedResponse;
       }
-      return fetch(event.request).catch(() => {
+
+      return fetch(event.request).then((networkResponse) => {
+        // Validate network response before caching
+        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+          return networkResponse;
+        }
+
+        // Origin and HTTPS/localhost validation
+        const reqUrl = new URL(event.request.url);
+        const isSameOrigin = reqUrl.origin === self.location.origin;
+        const isSecure = reqUrl.protocol === 'https:' || reqUrl.hostname === 'localhost' || reqUrl.hostname === '127.0.0.1';
+
+        if (!isSameOrigin || !isSecure) {
+          return networkResponse;
+        }
+
+        // Content-Type validation
+        const contentType = networkResponse.headers.get('content-type') || '';
+        const isAllowedType = ALLOWED_CONTENT_TYPES.some(t => contentType.toLowerCase().includes(t));
+
+        if (isAllowedType) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+
+        return networkResponse;
+      }).catch(() => {
         if (event.request.mode === 'navigate') {
           return caches.match('./index.html');
         }

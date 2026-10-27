@@ -215,17 +215,26 @@ export function computeSecvIntentVector(rawText) {
   const U = activateAxis(countU);
   const E = activateAxis(countE);
 
-  // 3. Extraction-Anchored Bilinear Synergy
-  // Fraudulent social engineering requires an extraction action (E) coupled with coercion or gain lures
-  const synergy = E * (1.8 * A + 2.2 * C + 2.0 * G + 1.5 * U + 2.5 * ((A + C + G) * U));
+  // 3. Multi-Axis Coercion Synergy & Extraction-Anchored Synergy
+  // Fraudulent social engineering requires extraction (E) OR intense multi-token intimidation (A + C + U)
+  const extractionSynergy = E * (1.8 * A + 2.2 * C + 2.0 * G + 1.5 * U + 2.5 * ((A + C + G) * U));
+  
+  // Multi-Axis Coercion Boost requires strong co-occurrence (e.g. 3+ total tokens across A, C, U with multiple counts)
+  const isMultiAxisCoercion = (A > 0 && C > 0 && U > 0 && (countA + countC + countU >= 4)) || (countA >= 2 && countC >= 2);
+  const coercionSynergy = isMultiAxisCoercion ? ((A * C * 1.5) + (A * U * 1.2) + (C * U * 1.2)) : 0;
+  const synergy = E > 0 ? extractionSynergy : coercionSynergy;
 
   // 4. Calibrated Log-Odds & Softmax Probability
   const logit = (1.1 * A + 1.4 * C + 1.2 * G + 1.0 * U + 2.0 * E + synergy) - 2.35;
   let probability = 1 / (1 + Math.exp(-logit));
 
-  // If no extraction action is present, this cannot be an actionable coercion extraction scam
+  // If no extraction action is present, allow elevated coercion boost only on multi-token convergence
   if (E === 0) {
-    probability = Math.min(probability, 0.25);
+    if (isMultiAxisCoercion) {
+      probability = Math.min(probability, 0.70);
+    } else {
+      probability = Math.min(probability, 0.25);
+    }
   }
   const score = Math.max(0, Math.min(100, Math.round(probability * 100)));
 
@@ -251,6 +260,9 @@ export function computeSecvIntentVector(rawText) {
 
   // A convergent scam requires extraction action E AND (Loss C or Gain G or Authority A) with probability >= 0.78
   const isConvergentScam = probability >= 0.78 && E > 0 && (A > 0 || C > 0 || G > 0);
+  const signal = isConvergentScam
+    ? 'SIG_SECV_PSYCHOLINGUISTIC_CONVERGENCE'
+    : (isMultiAxisCoercion && score >= 60 ? 'SIG_SECV_COERCION_INTIMIDATION' : null);
 
   return {
     vector: { A, C, G, U, E },

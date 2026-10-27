@@ -82,12 +82,23 @@ const CLASSIFICATION_LEGACY_MAP = {
 };
 
 /**
- * Generates a pseudo-random scan identifier.
+ * Generates a cryptographically authentic, unpredictable scan identifier.
+ * Uses native Web Crypto CSPRNG with safe fallback.
  * @returns {string} Unique scan ID prefixed with "scn_"
  */
 export function generateScanId() {
   const ts = Date.now().toString(36);
-  const rnd = Math.random().toString(36).substring(2, 8);
+  let rnd = '';
+  try {
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      const buf = new Uint8Array(8);
+      crypto.getRandomValues(buf);
+      rnd = Array.from(buf).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch (_) {}
+  if (!rnd) {
+    rnd = Math.random().toString(36).substring(2, 10);
+  }
   return `scn_${ts}_${rnd}`;
 }
 

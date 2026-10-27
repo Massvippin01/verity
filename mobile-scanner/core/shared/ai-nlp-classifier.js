@@ -180,7 +180,39 @@ const FEATURE_WEIGHTS = {
 };
 
 /**
- * Extracts normalized tokens: word unigrams, bigrams, and character 3/4-grams.
+ * Normalizes leetspeak character substitutions (@ -> a, 0 -> o, 1 -> l/i, $ -> s, etc.)
+ * @param {string} str
+ * @returns {string}
+ */
+export function normalizeLeetspeakChars(str) {
+  if (!str) return '';
+  return str
+    .replace(/@/g, 'a')
+    .replace(/0/g, 'o')
+    .replace(/1/g, 'l')
+    .replace(/\$/g, 's')
+    .replace(/3/g, 'e')
+    .replace(/4/g, 'a')
+    .replace(/5/g, 's')
+    .replace(/!/g, 'i');
+}
+
+/**
+ * Lightweight suffix stemming to handle plural/tense variations without external heavy stemmers.
+ * @param {string} word
+ * @returns {string}
+ */
+export function stemToken(word) {
+  if (!word || word.length < 5) return word;
+  if (word.endsWith('ing') && word.length > 5) return word.slice(0, -3);
+  if (word.endsWith('ed') && word.length > 4) return word.slice(0, -2);
+  if (word.endsWith('es') && word.length > 4) return word.slice(0, -2);
+  if (word.endsWith('s') && !word.endsWith('ss') && word.length > 4) return word.slice(0, -1);
+  return word;
+}
+
+/**
+ * Extracts normalized tokens: word unigrams, stems, bigrams, and character 3/4-grams.
  *
  * @param {string} text - Raw input string
  * @returns {string[]} Array of unique normalized feature strings
@@ -191,28 +223,39 @@ export function extractSubwordFeatures(text) {
   const rawLower = text.toLowerCase();
   // Normalize leetspeak separators like u_p_i -> upi, p-i-n -> pin
   const leetCollapsed = rawLower.replace(/([a-z0-9])[\s_.-]+(?=[a-z0-9])/gi, '$1');
+  const leetNormalized = normalizeLeetspeakChars(rawLower);
+  const leetNormalizedCollapsed = normalizeLeetspeakChars(leetCollapsed);
 
   // Tokenize words
   const words = rawLower.split(/[^a-z0-9\u0900-\u0D7F]+/).filter(w => w.length > 0);
   const collapsedWords = leetCollapsed.split(/[^a-z0-9\u0900-\u0D7F]+/).filter(w => w.length > 0);
+  const normWords = leetNormalized.split(/[^a-z0-9\u0900-\u0D7F]+/).filter(w => w.length > 0);
+  const normCollapsedWords = leetNormalizedCollapsed.split(/[^a-z0-9\u0900-\u0D7F]+/).filter(w => w.length > 0);
 
   const features = new Set();
+  const allTokenLists = [words, collapsedWords, normWords, normCollapsedWords];
 
-  // 1. Word Unigrams
-  for (const w of words) {
-    if (w.length >= 2) features.add(w);
-  }
-  for (const cw of collapsedWords) {
-    if (cw.length >= 2) features.add(cw);
+  // 1. Word Unigrams & Lightweight Stems
+  for (const list of allTokenLists) {
+    for (const w of list) {
+      if (w.length >= 2) {
+        features.add(w);
+        const stemmed = stemToken(w);
+        if (stemmed.length >= 2) features.add(stemmed);
+      }
+    }
   }
 
   // 2. Word Bigrams
   for (let i = 0; i < words.length - 1; i++) {
     features.add(`${words[i]}_${words[i + 1]}`);
+    if (normWords[i] && normWords[i + 1]) {
+      features.add(`${normWords[i]}_${normWords[i + 1]}`);
+    }
   }
 
   // 3. Overlapping Character 3-Grams and 4-Grams
-  const allWordTokens = Array.from(new Set([...words, ...collapsedWords]));
+  const allWordTokens = Array.from(new Set([...words, ...collapsedWords, ...normWords, ...normCollapsedWords]));
   for (const w of allWordTokens) {
     if (w.length >= 3) {
       for (let i = 0; i <= w.length - 3; i++) {

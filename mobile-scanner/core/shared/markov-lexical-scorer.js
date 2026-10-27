@@ -81,6 +81,25 @@ export function computeLexicalAnomalyScore(hostnameOrToken) {
   let rareBigramCount = 0;
   let lastCharType = null; // 'letter' | 'digit' | 'other'
 
+  // 0. Mixed-Script Homoglyph & Punycode DGA Detection
+  const isPunycode = primaryToken.startsWith('xn--') || domain.includes('xn--');
+  const hasAsciiLatin = /[a-z]/.test(primaryToken);
+  const hasNonAscii = /[^\x00-\x7F]/.test(primaryToken);
+  const isMixedScript = hasAsciiLatin && hasNonAscii;
+
+  if (isMixedScript) {
+    penalty += 75;
+  }
+
+  if (isPunycode) {
+    const punyPayload = primaryToken.startsWith('xn--') ? primaryToken.slice(4) : primaryToken;
+    if (punyPayload.length >= 4) {
+      penalty += 60;
+    } else {
+      penalty += 35;
+    }
+  }
+
   // Analyze characters
   for (let i = 0; i < primaryToken.length; i++) {
     const ch = primaryToken[i];
@@ -107,6 +126,12 @@ export function computeLexicalAnomalyScore(hostnameOrToken) {
         letterDigitSwitches++;
       }
       lastCharType = 'digit';
+      currentConsonantCluster = 0;
+    } else if (ch.charCodeAt(0) > 127) {
+      if (lastCharType === 'letter' || lastCharType === 'digit') {
+        letterDigitSwitches++;
+      }
+      lastCharType = 'other';
       currentConsonantCluster = 0;
     } else {
       // Separators/hyphens reset consonant cluster but do not break letter-digit interleaving tracking
@@ -176,7 +201,9 @@ export function computeLexicalAnomalyScore(hostnameOrToken) {
       consonantClusterMax,
       letterDigitSwitches,
       vowelRatio: Math.round(vowelRatio * 100) / 100,
-      rareBigramCount
+      rareBigramCount,
+      isMixedScript,
+      isPunycode
     }
   };
 }
