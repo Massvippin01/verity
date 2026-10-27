@@ -5,6 +5,15 @@
 
 ---
 
+## 🏆 Hack for Social Cause · Submission Checklist
+
+- [x] **README with setup steps & environment variables**: Fully documented below in [Installation & Setup](#installation--setup) and [Environment Variables & Configuration](#environment-variables--configuration).
+- [x] **Technical Design Document (including architectural diagrams)**: See [TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md) for full Mermaid system diagrams, mathematical models, and latency budgets.
+- [x] **Sample Data / Test cases**: Curated 30-case benchmark dataset in [`sample_data/`](sample_data/README.md) and 503 passing automated tests (`npm test`).
+- [x] **License file**: Open source under the [MIT License](LICENSE) (Copyright 2026).
+
+---
+
 ## The Problem
 
 Digital payments and internet adoption have expanded rapidly across India, but cyber fraud has surged at an alarming rate. According to official **Ministry of Home Affairs (MHA) data presented to the Lok Sabha (July 2025)**, Indian citizens reported losses of **₹22,845 Crore across 36 Lakh cyber financial fraud complaints in 2024** alone (a 206% surge from ₹7,465 Crore in 2023), with over **₹1,750 Crore** lost in the first four months of 2024 alone per Indian Cyber Crime Coordination Centre (I4C) NCRP telemetry. While I4C's Citizen Financial Cyber Fraud Reporting and Management System (CFCFRMS / 1930 Helpline) has proactively saved **₹8,690+ Crore across 24.65 Lakh complaints** up to January 31, 2026, and blocked **12.94 Lakh SIM cards** and **3.03 Lakh IMEIs** (PIB / MHA Release PRID 2241344), preventative client-side defense remains critical.
@@ -65,36 +74,63 @@ Verity is designed in strict alignment with India's **Digital Personal Data Prot
 
 ---
 
+## Environment Variables & Configuration
+
+### Privacy-First Architecture: Zero External Credentials Required
+> [!NOTE]
+> **Verity requires zero cloud API keys, external secrets, or database credentials for core operation.**  
+> All heuristic classification, 18-feature machine learning evaluation, and DOM inspection execute 100% locally and privately on the user's device. No telemetry or browsing history is ever transmitted to a cloud server.
+
+### Optional Configuration Variables
+For local simulation testing, CI test runners, or custom network setups, the following optional environment variables can be configured (see [`.env.example`](.env.example)):
+
+| Variable | Type | Default | Description |
+| :--- | :---: | :--- | :--- |
+| `PORT` | `number` | `8080` | Port for the interactive Grand Jury Demo Command Center & test server (`npm run demo`). |
+| `NODE_ENV` | `string` | `development` | Environment mode (`development`, `test`, or `production`). In `test`, diagnostic logs are silenced. |
+| `VERITY_DOH_RESOLVER` | `string` | `https://security.cloudflare-dns.com/dns-query` | Upstream DNS-over-HTTPS endpoint for privacy-preserving domain reputation queries (hostnames only). |
+| `ENABLE_DEV_ALLOWLIST` | `boolean` | `false` | When set to `true`, enables internal development domain allowlisting for loopback and local test servers. |
+
+---
+
 ## Installation & Setup
 
 ### Prerequisites
-- Node.js (v18.0.0 or higher)
-- npm (v9.0.0 or higher)
+- **Node.js** (v18.0.0 or higher)
+- **npm** (v9.0.0 or higher)
 
-### 1. Browser Extension
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/verity-shield/verity.git
-   cd verity
-   ```
-2. Open your Chromium-based browser (Chrome, Edge, Brave) and navigate to:
+### 1. Repository Setup
+```bash
+# Clone the repository
+git clone https://github.com/Massvippin01/verity_v2.git
+cd verity_v2
+
+# Install dependencies
+npm install
+
+# (Optional) Configure environment variables for demo/dev
+cp .env.example .env
+```
+
+### 2. Browser Extension (Manifest V3)
+1. Open your Chromium-based browser (Google Chrome, Microsoft Edge, Brave) and navigate to:
    ```
    chrome://extensions
    ```
-3. Enable **Developer mode** (toggle in the top-right corner).
-4. Click **Load unpacked** and select the `verity-extension/` directory.
-5. *(Optional - Firefox for Android)*: Use `about:debugging` or a custom Firefox Nightly Add-on Collection to load the extension.
+2. Enable **Developer mode** (toggle in the top-right corner).
+3. Click **Load unpacked** and select the [`verity-extension/`](verity-extension/) directory.
+4. *(Optional - Firefox for Android)*: Navigate to `about:debugging` or use a custom Firefox Nightly Add-on Collection to load the extension on mobile.
 
-### 2. Standalone Mobile Scanner (PWA)
+### 3. Standalone Mobile Scanner (PWA)
 1. Build the mobile core distribution:
    ```bash
    npm run build:mobile
    ```
-2. Serve the `mobile-scanner/` directory locally or over HTTPS:
+2. Serve the [`mobile-scanner/`](mobile-scanner/) directory locally or over HTTPS:
    ```bash
    npx serve mobile-scanner -l 8080
    ```
-3. Open `http://localhost:8080` (or your local network IP) on your mobile device.
+3. Open `http://localhost:8080` (or your local network IP) on your smartphone.
 4. Tap your browser's menu and select **"Add to Home Screen"** or **"Install Verity Scanner"**.
 
 ---
@@ -102,16 +138,16 @@ Verity is designed in strict alignment with India's **Digital Personal Data Prot
 ## Verification & Commands
 
 ```bash
-# Run the complete test suite (234 unit, integration, and security tests)
+# Run the complete test suite (503 unit, integration, and security tests across 42 suites in ~2.5s)
 npm test
 
-# Launch the interactive local test server demonstrating 10+ real-world scam scenarios
+# Launch the interactive Grand Jury Demo Command Center & Test Suite at http://localhost:8080/
 npm run demo
 
-# Execute the 1,000-iteration performance benchmark suite
+# Execute the 1,000-iteration performance benchmark suite (< 3.9ms latency)
 npm run benchmark
 
-# Re-build the standalone PWA distribution
+# Re-build and synchronize the standalone PWA distribution
 npm run build:mobile
 ```
 
@@ -121,39 +157,43 @@ npm run build:mobile
 
 ```
 verity/
+├── .env.example                        # Template for optional demo/testing configuration
+├── TECHNICAL_DESIGN.md                 # Complete system architecture, math models & diagrams
+├── LICENSE                             # MIT License
+├── README.md                           # Project documentation & setup guide
+├── package.json                        # Root workspace configuration
+├── verity_demo_server.js               # Grand Jury Demo Command Center & HTTP server
 ├── docs/                               # System documentation & technical designs
-│   ├── archive/                        # Archived design notes and hackathon briefs
 │   ├── BENCHMARKS.md                   # Machine benchmarks and latency budgets
 │   ├── KNOWN_LIMITATIONS.md            # Transparent threat surface and limitation analysis
-│   └── TECHNICAL_DESIGN.md             # Complete system architecture and math specification
+│   └── TECHNICAL_DESIGN.md             # Architecture & mathematical specification
 ├── mobile-scanner/                     # Standalone installable PWA application
 │   ├── core/                           # Synchronized shared engine modules
 │   ├── manifest.json                   # Web App Manifest & Web Share Target config
 │   └── index.html                      # Mobile scanner interface (camera, text, share)
 ├── sample_data/                        # Curated cyber fraud test cases (English & Indic languages)
+│   ├── README.md                       # Test case specification & RFC 2606 defanging policy
+│   ├── indian_cyber_fraud_test_cases.json # 30 benchmark labeled cyber fraud scenarios
+│   └── pilot_simulation_results.json   # Simulation telemetry data
 ├── scripts/                            # Operational and evaluation scripts
 │   ├── bench.js                        # 1,000-iteration benchmark harness
 │   └── build-mobile-core.js            # PWA core builder and synchronizer
-├── verity-extension/                   # Browser extension root (MV3)
-│   ├── background/                     # Service worker, rules engine, and risk engine
-│   │   ├── model/                      # On-device ONNX machine learning models
-│   │   ├── risk-engine.js              # Adaptive risk engine & diminishing weights
-│   │   ├── rules.js                    # 16 synchronous heuristic rules
-│   │   └── dnr-blocker.js              # Declarative Net Request fast-path blocker
-│   ├── content/                        # Isolated and MAIN world content scripts
-│   │   ├── bharat-scam-detectors.js    # Digital Arrest, APK dropper, and UPI detectors
-│   │   ├── content-script.js           # DOM traversal, shadow piercing, overlays
-│   │   ├── main-world-interceptor.js   # MAIN world fetch, XHR, sendBeacon, WebSocket traps
-│   │   └── search/                     # Real-time search engine result safety badging
-│   ├── popup/                          # Extension toolbar popup interface
-│   ├── shared/                         # Cross-surface libraries (PSL, Allowlist, Messages)
-│   ├── tests/                          # 290 automated tests (node:test)
-│   ├── ui/                             # Zero-latency block screen (blocked.html)
-│   └── manifest.json                   # MV3 Extension Manifest
-├── verity_demo_server.js               # Interactive evaluation and demo HTTP server
-├── LICENSE                             # MIT License
-├── package.json                        # Root workspace configuration
-└── README.md                           # Project documentation
+└── verity-extension/                   # Browser extension root (MV3)
+    ├── background/                     # Service worker, rules engine, and risk engine
+    │   ├── model/                      # On-device ONNX machine learning models
+    │   ├── risk-engine.js              # Maximum severity floor resolver & risk engine
+    │   ├── rules.js                    # 16 synchronous heuristic rules
+    │   └── dnr-blocker.js              # Declarative Net Request fast-path blocker
+    ├── content/                        # Isolated and MAIN world content scripts
+    │   ├── bharat-scam-detectors.js    # Digital Arrest, APK dropper, and UPI detectors
+    │   ├── content-script.js           # DOM traversal, shadow piercing, overlays
+    │   ├── main-world-interceptor.js   # MAIN world fetch, XHR, sendBeacon, WebSocket traps
+    │   └── search/                     # Real-time search engine result safety badging
+    ├── popup/                          # Extension toolbar popup interface
+    ├── shared/                         # Cross-surface libraries (PSL, Allowlist, Messages)
+    ├── tests/                          # 503 automated tests across 42 suites (node:test)
+    ├── ui/                             # Zero-latency block screen (blocked.html)
+    └── manifest.json                   # MV3 Extension Manifest
 ```
 
 ---
