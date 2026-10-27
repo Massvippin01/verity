@@ -102,8 +102,8 @@ For local simulation testing, CI test runners, or custom network setups, the fol
 ### 1. Repository Setup
 ```bash
 # Clone the repository
-git clone https://github.com/Massvippin01/verity_v2.git
-cd verity_v2
+git clone https://github.com/Massvippin01/verity.git
+cd verity
 
 # Install dependencies
 npm install
