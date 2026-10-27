@@ -5,7 +5,7 @@
  * and zero external network calls.
  */
 
-const CACHE_NAME = 'verity-mobile-v2';
+const CACHE_NAME = 'verity-mobile-v3';
 
 const PRECACHE_ASSETS = [
   './',
@@ -32,16 +32,10 @@ const PRECACHE_ASSETS = [
   './core/shared/messages.en.js',
   './core/shared/apk-bytecode-analyzer.js',
   './core/shared/live-call-guardian.js',
-  './core/background/compromised-site-detector.js',
-  './core/content/search-shield.js',
-  './core/background/rules.js',
-  './core/background/risk-engine.js',
-  './core/background/homograph-detector.js',
-  './core/background/favicon-matcher.js',
-  './core/background/enterprise-whitelist.js',
-  './core/background/brand-detector.js',
-  './core/content/bharat-scam-detectors.js',
-  './core/config/top_domains.js'
+  './core/shared/secv-intent-engine.js',
+  './core/shared/recovery-advisor.js',
+  './core/shared/flight-recorder.js',
+  './core/shared/online-scam-verifier.js'
 ];
 
 self.addEventListener('install', (event) => {

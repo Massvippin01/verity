@@ -14,14 +14,16 @@
     let protocol = 'http:';
     let path = '/';
 
+    const safeStr = typeof urlString === 'string' ? urlString : (urlString?.url || '');
+
     try {
-      const urlToParse = (urlString && urlString.includes('://')) ? urlString : `http://${urlString || 'unknown-host'}`;
+      const urlToParse = (safeStr && safeStr.includes('://')) ? safeStr : `http://${safeStr || 'unknown-host'}`;
       const u = new URL(urlToParse);
       hostname = u.hostname.toLowerCase();
       protocol = u.protocol;
       path = u.pathname;
     } catch (_) {
-      hostname = (urlString || '').toLowerCase().split('/')[0];
+      hostname = (safeStr || '').toLowerCase().split('/')[0];
     }
 
     const parts = hostname.split('.').filter(Boolean);
@@ -49,7 +51,9 @@
   function detectPsychologicalTrigger(analysisResult = {}) {
     const signals = analysisResult.signals || [];
     const reasons = analysisResult.reasons || [];
-    const corpus = (signals.map(s => s.id || s).join(' ') + ' ' + reasons.map(r => r.reason || r).join(' ')).toLowerCase();
+    const sigStr = signals.map(s => (typeof s === 'string' ? s : (s?.id || s?.description || s?.reason || ''))).join(' ');
+    const rsnStr = reasons.map(r => (typeof r === 'string' ? r : (r?.reason || r?.description || r?.text || ''))).join(' ');
+    const corpus = `${sigStr} ${rsnStr}`.toLowerCase();
 
     // 1. Fear & False Authority
     if (corpus.includes('digital_arrest') || corpus.includes('police') || corpus.includes('cbi') || corpus.includes('customs') || corpus.includes('kyc_cyber_fraud') || corpus.includes('warrant')) {
@@ -108,10 +112,9 @@
   function generateContextualQuiz(analysisResult = {}, anatomy = {}) {
     const signals = analysisResult.signals || [];
     const reasons = analysisResult.reasons || [];
-    const corpus = (
-      signals.map(s => s.id || s).join(' ') + ' ' +
-      reasons.map(r => r.reason || r).join(' ')
-    ).toLowerCase();
+    const sigStr = signals.map(s => (typeof s === 'string' ? s : (s?.id || s?.description || s?.reason || ''))).join(' ');
+    const rsnStr = reasons.map(r => (typeof r === 'string' ? r : (r?.reason || r?.description || r?.text || ''))).join(' ');
+    const corpus = `${sigStr} ${rsnStr}`.toLowerCase();
 
     // 1. Digital Arrest Quiz
     if (corpus.includes('digital_arrest') || corpus.includes('police') || corpus.includes('cbi')) {

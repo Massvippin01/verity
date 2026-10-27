@@ -1,12 +1,12 @@
 {
-  "name": "Verity Shield: Cyber Fraud Scanner",
+  "name": "Verity Shield: Citizen Cyber Safety & Mobile Forensics",
   "short_name": "Verity",
-  "description": "On-device Indian cyber fraud, WhatsApp scam, APK bytecode x-ray & live speakerphone guardian",
+  "description": "On-device Indian cyber fraud, WhatsApp scam, UPI QR trap & live forensics lab",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0b0f19",
-  "theme_color": "#0b0f19",
+  "background_color": "#09090B",
+  "theme_color": "#09090B",
   "icons": [
     {
       "src": "icons/icon-192.png",
@@ -23,26 +23,11 @@
   ],
   "share_target": {
     "action": "./",
-    "method": "POST",
-    "enctype": "multipart/form-data",
+    "method": "GET",
     "params": {
       "title": "title",
       "text": "text",
-      "url": "url",
-      "files": [
-        {
-          "name": "files",
-          "accept": [
-            "application/vnd.android.package-archive",
-            "application/x-authorware-bin",
-            ".apk",
-            "application/pdf",
-            ".pdf",
-            "image/*",
-            "text/plain"
-          ]
-        }
-      ]
+      "url": "url"
     }
   }
 }
