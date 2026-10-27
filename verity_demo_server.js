@@ -697,15 +697,15 @@ const server = http.createServer((req, res) => {
   .note{font-size:13px;color:#94a3b8;margin-top:12px;line-height:1.4}
 </style></head><body>
 <div class="card">
-  <div class="badge">OLX BUYER ESCROW SERVICE</div>
+  <div class="badge">OLX BUYER PAYMENT — ESCROW SERVICE</div>
   <h2 style="margin:0;color:#f8fafc">Buyer Sent ₹15,000 Payment</h2>
-  <p class="note">The buyer for your listing has transferred ₹15,000 into OLX Instant UPI Escrow. Scan or click below to accept payment into your bank account.</p>
+  <p class="note">The buyer for your listing has transferred ₹15,000 into OLX Instant UPI Escrow. <strong>Scan to receive payment</strong> into your bank account or click below to accept payment.</p>
   <div class="amount">₹15,000</div>
   <div class="qr-box">
     <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi%3A%2F%2Fpay%3Fpa%3Dolx_buyer_trap%40okhdfcbank%26pn%3DOLXBuyer%26am%3D15000%26cu%3DINR%26tn%3DOLX%2BPayment%2BAccept" alt="UPI QR Collect Trap" data-upi="upi://pay?pa=olx_buyer_trap@okhdfcbank&pn=OLXBuyer&am=15000&cu=INR&tn=OLX+Payment+Accept">
   </div>
   <a class="btn" href="upi://pay?pa=olx_buyer_trap@okhdfcbank&pn=OLXBuyer&am=15000&cu=INR&tn=OLX+Payment+Accept" id="upi-btn">
-    👉 Click to Accept ₹15,000 (Collect Trap)
+    👉 Scan to Receive Payment (₹15,000)
   </a>
   <p style="font-size:11px;color:#ef4444;margin-top:12px">⚠️ Reality: Clicking this authorizes a ₹15,000 DEBIT from your account.</p>
 </div>

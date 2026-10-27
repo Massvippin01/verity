@@ -534,6 +534,8 @@ const BHARAT_APK_LURE_KEYWORDS = [
 const BHARAT_DECEPTIVE_RECEIVE_LURES = [
   'receive cashback', 'claim reward', 'refund amount', 'scan to receive',
   'olx buyer payment', 'lottery prize', 'money will be credited',
+  'click to accept', 'accept payment', 'accept money', 'buyer sent',
+  'receive payment', 'buyer payment', 'escrow buyer payment', 'scan to accept',
   'claim bonus', 'scan qr to get money', 'scan to credit', 'scan & receive',
   'claim your refund', 'instant refund', 'cashback won'
 ];

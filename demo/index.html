@@ -909,6 +909,27 @@
          ═════════════════════════════════════════════════════════════════════════ -->
     <div class="tab-pane active" id="pane-browser">
 
+      <!-- Grand Jury Demo Guidance Banner -->
+      <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 18px 24px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; gap: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+        <div style="display: flex; gap: 16px; align-items: flex-start;">
+          <span style="font-size: 26px; line-height: 1;">🛡️</span>
+          <div>
+            <div style="font-weight: 700; color: #f8fafc; font-size: 0.98rem; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+              <span>Grand Jury Demo Guide & How Verity Defends</span>
+              <span style="background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); font-size: 0.72rem; padding: 2px 8px; border-radius: 10px;">ACTIVE PROTECTION</span>
+            </div>
+            <p style="font-size: 0.84rem; color: #94a3b8; line-height: 1.5; margin: 0;">
+              • When you click <strong>Launch Scenario</strong>, Verity's <strong>full-bleed red block screen</strong> or <strong>download pause shield</strong> is the <em>threat interception in action</em>!<br>
+              • ⚠️ <strong>DO NOT</strong> click <em>"I understand the risk and take me there"</em> or <em>"Proceed"</em> — that is the user bypass override.<br>
+              • If you previously clicked proceed on any demo tab, click the reset button on the right to restore clean demo mode.
+            </p>
+          </div>
+        </div>
+        <button onclick="resetAllOverrides()" style="white-space: nowrap; background: #38bdf8; color: #09090b; font-weight: 700; font-size: 0.85rem; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(56, 189, 248, 0.25);">
+          🔄 Reset Overrides (Clean Slate)
+        </button>
+      </div>
+
       <!-- Section: Core Judging Flow -->
       <div class="section-header">
         <h2 class="section-title">
@@ -936,7 +957,7 @@
             <div class="spec-row"><span class="spec-key">Visual Outcome:</span> <span style="color:#ef4444">Full Red Block Shield & Network Sever</span></div>
           </div>
           <div class="card-actions">
-            <a href="/demo/sbi-kyc-telegram" target="_blank" class="btn-launch">
+            <a href="/demo/sbi-kyc-telegram" target="_blank" class="btn-launch" onclick="launchScenario('/demo/sbi-kyc-telegram'); return false;">
               🚀 Launch Scenario 1
             </a>
             <button class="btn-inspect" onclick="inspectPayload('sbi')">Inspect</button>
@@ -959,7 +980,7 @@
             <div class="spec-row"><span class="spec-key">Visual Outcome:</span> <span style="color:#f59e0b">Reversal Alert: "You are about to PAY"</span></div>
           </div>
           <div class="card-actions">
-            <a href="/demo/olx-upi" target="_blank" class="btn-launch">
+            <a href="/demo/olx-upi" target="_blank" class="btn-launch" onclick="launchScenario('/demo/olx-upi'); return false;">
               🚀 Launch Scenario 2
             </a>
             <button class="btn-inspect" onclick="inspectPayload('upi')">Inspect</button>
@@ -982,7 +1003,7 @@
             <div class="spec-row"><span class="spec-key">Visual Outcome:</span> <span style="color:#ef4444">Red Warning + Direct 1930 Helpline CTA</span></div>
           </div>
           <div class="card-actions">
-            <a href="/demo/cbi-digital-arrest" target="_blank" class="btn-launch">
+            <a href="/demo/cbi-digital-arrest" target="_blank" class="btn-launch" onclick="launchScenario('/demo/cbi-digital-arrest'); return false;">
               🚀 Launch Scenario 3
             </a>
             <button class="btn-inspect" onclick="inspectPayload('cbi')">Inspect</button>
@@ -1005,7 +1026,7 @@
             <div class="spec-row"><span class="spec-key">Visual Outcome:</span> <span style="color:#ef4444">Download Stream Instantly PAUSED in Browser</span></div>
           </div>
           <div class="card-actions">
-            <a href="/demo/rto-apk" target="_blank" class="btn-launch">
+            <a href="/demo/rto-apk" target="_blank" class="btn-launch" onclick="launchScenario('/demo/rto-apk'); return false;">
               🚀 Launch Scenario 4
             </a>
             <button class="btn-inspect" onclick="inspectPayload('apk')">Inspect</button>
@@ -1039,7 +1060,7 @@
             <div class="spec-row"><span class="spec-key">Defense Mechanism:</span> <span>Simulated window bounds & iframe origin isolation</span></div>
           </div>
           <div class="card-actions">
-            <a href="/demo/bitb" target="_blank" class="btn-launch">Launch BitB Demo</a>
+            <a href="/demo/bitb" target="_blank" class="btn-launch" onclick="launchScenario('/demo/bitb'); return false;">Launch BitB Demo</a>
           </div>
         </div>
 
@@ -1058,7 +1079,7 @@
             <div class="spec-row"><span class="spec-key">Defense Mechanism:</span> <span>IdP input matching on non-whitelisted hosts</span></div>
           </div>
           <div class="card-actions">
-            <a href="/demo/aitm" target="_blank" class="btn-launch">Launch AiTM Demo</a>
+            <a href="/demo/aitm" target="_blank" class="btn-launch" onclick="launchScenario('/demo/aitm'); return false;">Launch AiTM Demo</a>
           </div>
         </div>
 
@@ -1077,7 +1098,7 @@
             <div class="spec-row"><span class="spec-key">Defense Mechanism:</span> <span>Local client-side QR image matrix decoding</span></div>
           </div>
           <div class="card-actions">
-            <a href="/demo/quishing" target="_blank" class="btn-launch">Launch Quishing Demo</a>
+            <a href="/demo/quishing" target="_blank" class="btn-launch" onclick="launchScenario('/demo/quishing'); return false;">Launch Quishing Demo</a>
           </div>
         </div>
 
@@ -1096,7 +1117,7 @@
             <div class="spec-row"><span class="spec-key">Defense Mechanism:</span> <span>Main-world API trap & clipboard payload sanitizer</span></div>
           </div>
           <div class="card-actions">
-            <a href="/demo/clipboard-swap" target="_blank" class="btn-launch">Launch Clipboard Demo</a>
+            <a href="/demo/clipboard-swap" target="_blank" class="btn-launch" onclick="launchScenario('/demo/clipboard-swap'); return false;">Launch Clipboard Demo</a>
           </div>
         </div>
 
@@ -1115,7 +1136,7 @@
             <div class="spec-row"><span class="spec-key">Defense Mechanism:</span> <span>PowerShell keyword matching + clipboard defusal</span></div>
           </div>
           <div class="card-actions">
-            <a href="/demo/clickfix" target="_blank" class="btn-launch">Launch ClickFix Demo</a>
+            <a href="/demo/clickfix" target="_blank" class="btn-launch" onclick="launchScenario('/demo/clickfix'); return false;">Launch ClickFix Demo</a>
           </div>
         </div>
 
@@ -1134,7 +1155,7 @@
             <div class="spec-row"><span class="spec-key">Outcome:</span> <span style="color:#10b981">Score 0 · Action: ALLOW · Severity: SAFE</span></div>
           </div>
           <div class="card-actions">
-            <a href="/demo/bank" target="_blank" class="btn-launch" style="background: linear-gradient(135deg, #059669, #10b981);">
+            <a href="/demo/bank" target="_blank" class="btn-launch" onclick="launchScenario('/demo/bank'); return false;" style="background: linear-gradient(135deg, #059669, #10b981);">
               Launch Safe Control
             </a>
           </div>
@@ -1814,6 +1835,31 @@
       timerSeconds = 180;
       updateTimerDisplay();
       document.getElementById('btn-timer-toggle').textContent = 'Start Timer ▶';
+    }
+
+    // Grand Jury Override Reset & Launch Helpers
+    function resetAllOverrides() {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        try {
+          chrome.runtime.sendMessage({ action: 'CLEAR_USER_OVERRIDES' }, (res) => {
+            alert('🛡️ Verity Extension Overrides Cleared! All localhost scenarios will now trigger full red-shield security interception.');
+          });
+          return;
+        } catch (_) {}
+      }
+      alert('🛡️ Demo overrides reset! Note: If you have already loaded the extension in Chrome, click the Verity toolbar icon on any page to verify its active shield.');
+    }
+
+    function launchScenario(url) {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        try {
+          chrome.runtime.sendMessage({ action: 'CLEAR_USER_OVERRIDES' }, () => {
+            window.open(url, '_blank');
+          });
+          return;
+        } catch (_) {}
+      }
+      window.open(url, '_blank');
     }
   </script>
 </body>

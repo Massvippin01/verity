@@ -693,7 +693,9 @@ export async function rehydrateUserOverrides() {
         });
       }
       if (data && Array.isArray(data.verity_override_domains)) {
-        data.verity_override_domains.forEach(d => userOverrideDomains.add(d));
+        data.verity_override_domains
+          .filter(d => d !== 'localhost' && d !== '127.0.0.1' && d !== '0.0.0.0' && !d.endsWith('.localhost'))
+          .forEach(d => userOverrideDomains.add(d));
       }
     } catch (_) {}
   }
@@ -708,6 +710,10 @@ export function isUserOverridden(tabId, url) {
   if (url) {
     try {
       const host = new URL(url).hostname.toLowerCase();
+      // Local development and demo hostnames MUST NEVER inherit root domain overrides!
+      if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host.endsWith('.localhost')) {
+        return false;
+      }
       const root = getDomain(host) || host;
       if (userOverrideDomains.has(host) || userOverrideDomains.has(root)) {
         return true;
@@ -1210,8 +1216,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         try {
           host = new URL(targetUrl).hostname.toLowerCase();
           root = getDomain(host) || host;
-          userOverrideDomains.add(host);
-          userOverrideDomains.add(root);
+          if (host !== 'localhost' && host !== '127.0.0.1' && host !== '0.0.0.0' && !host.endsWith('.localhost')) {
+            userOverrideDomains.add(host);
+            userOverrideDomains.add(root);
+          }
         } catch (e) {}
       }
 
@@ -1249,6 +1257,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: false, reason: 'Missing target tab ID' });
     }
     return true; // Keep channel open for async response
+  }
+
+  if (message.action === 'CLEAR_USER_OVERRIDES' || message.action === 'RESET_DEMO_OVERRIDES') {
+    userOverrideTabs.clear();
+    userOverrideDomains.clear();
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
+      chrome.storage.session.remove(['verity_override_tabs', 'verity_override_domains']).catch(() => {});
+    }
+    sendResponse({ success: true, message: 'All demo user overrides successfully cleared' });
+    return false;
   }
 
   if (message.action === 'NAVIGATE_TO_SAFETY') {

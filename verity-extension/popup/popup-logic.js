@@ -113,6 +113,29 @@ export function formatTabViewModel(tab, verdict, lang = 'en', date = new Date())
   const action = String(verdict?.action || verdict?.verdict?.action || '').toUpperCase();
   const severity = String(verdict?.severity || verdict?.state || verdict?.verdict?.severity || verdict?.verdict?.state || '').toUpperCase();
 
+  const isOverridden = !!(verdict?.userOverridden || verdict?.verdict?.userOverridden);
+  if (isOverridden) {
+    return {
+      isInternal: false,
+      isOverridden: true,
+      status: 'caution',
+      statusText: eff === 'ta' ? 'பயனர் புறக்கணிப்பு' : eff === 'hi' ? 'सुरक्षा बायपास की गई' : 'OVERRIDDEN BY USER',
+      domain: extractDomain(url),
+      url,
+      score: 0,
+      plainReasons: [
+        eff === 'ta' ? 'பாதுகாப்பு பயனரால் புறக்கணிக்கப்பட்டது.' :
+        eff === 'hi' ? 'सुरक्षा चेतावनी को उपयोगकर्ता द्वारा बायपास किया गया।' :
+        'Protection was manually bypassed by user ("I understand the risk").'
+      ],
+      goldenRuleKey: 'generic',
+      goldenRuleTitle: UI[eff]?.goldenRuleTitle || UI.en.goldenRuleTitle,
+      goldenRuleText: 'Always re-enable active shield after inspecting untrusted sites.',
+      advancedDetails: 'Security protection was manually bypassed via user override.',
+      rawSignals: []
+    };
+  }
+
   let status = 'safe';
   if (score >= 70 || action === 'BLOCK' || severity === 'DANGER' || severity === 'CRITICAL' || severity === 'HIGH') {
     status = 'danger';

@@ -110,6 +110,26 @@ function renderCurrentSiteCard() {
         li.setAttribute('lang', currentLang);
         currentSiteReasons.appendChild(li);
       });
+      if (vm.isOverridden) {
+        const resetLi = document.createElement('li');
+        resetLi.style.cssText = 'list-style:none;margin-top:8px;';
+        const resetBtn = document.createElement('button');
+        resetBtn.type = 'button';
+        resetBtn.textContent = '🛡️ Re-enable Active Protection';
+        resetBtn.style.cssText = 'padding:6px 12px;background:#38bdf8;color:#09090b;font-weight:700;font-size:11px;border:none;border-radius:6px;cursor:pointer;';
+        resetBtn.addEventListener('click', () => {
+          if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+            chrome.runtime.sendMessage({ action: 'CLEAR_USER_OVERRIDES' }, () => {
+              if (activeTab?.id) {
+                chrome.tabs.reload(activeTab.id);
+                window.close();
+              }
+            });
+          }
+        });
+        resetLi.appendChild(resetBtn);
+        currentSiteReasons.appendChild(resetLi);
+      }
     } else {
       currentSiteReasons.classList.add('hidden');
     }
