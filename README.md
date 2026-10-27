@@ -5,12 +5,12 @@
 
 ---
 
-## 🏆 Hack for Social Cause · Submission Checklist
+## Key Deliverables & Documentation
 
-- [x] **README with setup steps & environment variables**: Fully documented below in [Installation & Setup](#installation--setup) and [Environment Variables & Configuration](#environment-variables--configuration).
-- [x] **Technical Design Document (including architectural diagrams)**: See [TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md) for full Mermaid system diagrams, mathematical models, and latency budgets.
-- [x] **Sample Data / Test cases**: Curated 30-case benchmark dataset in [`sample_data/`](sample_data/README.md) and 503 passing automated tests (`npm test`).
-- [x] **License file**: Open source under the [MIT License](LICENSE) (Copyright 2026).
+- **README with setup steps & environment variables**: Fully documented in [Installation & Setup](#installation--setup) and [Environment Variables & Configuration](#environment-variables--configuration).
+- **Technical Design Document (including architectural diagrams)**: See [TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md) for full Mermaid system diagrams, mathematical models, and latency budgets.
+- **Sample Data / Test cases**: Curated 30-case benchmark dataset in [`sample_data/`](sample_data/README.md) and 503 passing automated tests (`npm test`).
+- **License file**: Open source under the [MIT License](LICENSE) (Copyright 2026).
 
 ---
 
@@ -213,10 +213,9 @@ Verity contributes directly to four United Nations Sustainable Development Goals
 
 | Role | Name / Identifier | Primary Responsibilities |
 | :--- | :--- | :--- |
-| **Lead Architect & Security Engineer** | Contributor One (Placeholder) | System architecture, risk engine math, MAIN-world interceptors |
-| **Machine Learning Engineer** | Contributor Two (Placeholder) | 18-feature lexical dataset, GroupKFold validation, ONNX export |
-| **Full-Stack & Mobile Developer** | Contributor Three (Placeholder) | PWA implementation, Web Share Target, search result badging |
-| **Threat Research & Localization** | Contributor Four (Placeholder) | Bharat scam heuristics, multilingual dictionaries (Hindi/Tamil/Telugu) |
+| **Lead Architect & Security Engineer & Planning** | Vippin Antony P | System architecture, risk engine math, MAIN-world interceptors, core planning |
+| **Machine Learning** | Yaathra, Vippin Antony P | 18-feature lexical dataset, GroupKFold validation, ONNX export |
+| **PWA Implementation** | Yaathra, Siva L | PWA implementation, Web Share Target, search result badging, mobile scanner |
 
 ---
 
